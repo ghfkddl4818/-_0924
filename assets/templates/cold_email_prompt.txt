@@ -1,0 +1,32 @@
+당신은 B2B 세일즈 이메일 전문가입니다. 아래 입력을 바탕으로 한국어 콜드메일을 생성하세요.
+출력 형식은 반드시 다음 JSON 구조와 본문을 함께 제공합니다.
+
+[OUTPUT SPEC]
+1) JSON meta (한 줄로)
+{
+  "product_name": "<제품명>",
+  "unique_features": ["<핵심특징1>", "<핵심특징2>"],
+  "call_to_action": "<받는 사람에게 원하는 행동>"
+}
+2) Email body (한국어 본문)
+
+[CONTEXT]
+- 톤: professional
+- 길이: 최대 500자
+- 수신자: B2B 바이어/담당자
+- 금지: 과장/허위, 과도한 영업용어
+- 참고: OCR 추출 텍스트/리뷰 요약이 있을 수 있음
+
+[INPUT FIELDS]
+- 제품명: {product_name}
+- 브랜드: {brand}
+- 특징: {features}
+- 리뷰 요약: {review_summary}
+- 언어: {language}
+
+[REQUIREMENTS]
+- JSON meta와 본문 사이에 빈 줄 1개
+- 본문에 "제품명"을 1회 자연스럽게 노출
+- CTA는 일정/연락/견적 제안 중 하나를 구체적으로
+
+이제 JSON meta와 Email body를 출력하세요.

@@ -1,0 +1,163 @@
+system:
+  version: "2.0.0"
+  encoding: "utf-8"
+  debug_mode: false
+  test_mode: false
+
+paths:
+  root_dir: "."
+  download_folder: "./downloads"      # 확장프로그램 제약 시 이 값만 맞추면 됨
+  work_folder: "./data/work"
+  storage_folder: "./data/storage"
+  output_folder: "./outputs"
+  log_folder: "./logs"
+  checkpoint_folder: "./data/checkpoint"
+
+database:
+  file_path: "./data/storage/ecommerce_database.xlsx"
+  sheet_name: "Products"
+  backup_count: 5
+  auto_save_interval: 10
+
+web_automation:
+  total_products: 30
+  browser: "chrome"
+  window_state: "maximized"
+  zoom_level: 100
+  tab_switch_delay: 0.5
+  close_after_process: true
+
+  image_matching:
+    confidence: 0.8
+    grayscale: true
+    multi_scale: [0.8, 0.9, 1.0, 1.1, 1.2]
+    region_limit: true
+    cache_templates: true
+    match_method: "cv2.TM_CCOEFF_NORMED"
+
+  buttons:
+    detail:
+      primary: "assets/img/detail_button.png"
+      alternative: "assets/img/detail_button_alt.png"
+      confidence: 0.85
+      retry: 5
+      wait_after: 2.0
+      search_region: [0, 200, 1920, 800]
+      click_offset: [0, 0]
+
+    fireshot:
+      trigger_key: "ctrl+shift+s"
+      save_button: "assets/img/fireshot_save.png"
+      confidence: 0.9
+      timeout: 5.0
+      wait_after: 3.0
+
+    analysis:
+      start: "assets/img/analysis_start.png"
+      excel: "assets/img/excel_download.png"
+      confidence: 0.85
+      wait_between: 1.5
+      download_timeout: 45.0  # 상한: 실제 완료는 검증기로
+
+    navigation:
+      next_tab: "ctrl+tab"
+      prev_tab: "ctrl+shift+tab"
+      close_tab: "ctrl+w"
+
+  scrolling:
+    amount: 500
+    max_scrolls: 16
+    wait_between: 0.5
+    smooth_scroll: true
+
+  error_handling:
+    retry_attempts: 3
+    retry_delay: 1.0
+    fail_fast_limit: 3
+    consecutive_fail_action: "pause"
+    auto_restart_browser: true
+    checkpoint_enabled: true
+    checkpoint_interval: 1
+    skip_list_file: "./data/skip_list.txt"
+
+ocr:
+  engine: "tesseract"
+  languages: ["ko", "en"]
+  gpu: false
+  regions:
+    product_name: [100, 50, 800, 150]
+    price: [100, 200, 300, 250]
+    brand: [100, 300, 500, 350]
+    description: [100, 400, 1000, 500]
+  preprocessing:
+    grayscale: true
+    denoise: true
+    threshold: 128
+    dpi: 300
+  tesseract:
+    psm: 3
+    oem: 3
+    config: "--oem 3 --psm 3 -l kor+eng"
+  easyocr:
+    detail: 1
+    paragraph: true
+    width_ths: 0.5
+
+ai:
+  provider: "gemini"               # 현재는 Vertex(Gemini)만 사용
+  api_key: "${GEMINI_API_KEY}"
+  models:
+    gemini:
+      model: "gemini-1.5-flash"
+      temperature: 0.3
+      max_tokens: 1000
+      top_p: 0.9
+    claude:
+      model: "claude-3.5-sonnet"
+      temperature: 0.5
+      max_tokens: 1200
+    openai:
+      model: "gpt-4.1-mini"
+      temperature: 0.5
+      max_tokens: 1200
+  generation:
+    retry_attempts: 3
+    timeout: 45
+    exponential_backoff: true
+    batch_size: 5
+  prompt:
+    template_file: "assets/templates/cold_email_prompt.txt"
+    tone: "professional"
+    language: "korean"
+    max_length: 500
+    output_format: "json+body"
+    schema:
+      required: ["product_name","unique_features","call_to_action"]
+      optional: ["price_mention","review_summary"]
+    must_include: []
+
+gui:
+  window:
+    title: "Ultimate Automation System v2.0"
+    size: "1400x800"
+    min_size: "1200x600"
+    resizable: true
+    theme: "modern"
+
+performance:
+  batch_size: 10
+  memory_limit_mb: 2048
+  gc_interval: 50
+  parallel_ocr: true
+  max_workers: 4
+  cache_size_mb: 512
+
+logging:
+  level: "INFO"
+  format: "[%(asctime)s][%(name)s][%(levelname)s] %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+  file_rotation: "daily"
+  max_files: 30
+  max_size_mb: 100
+  console_output: true
+  gui_output: true

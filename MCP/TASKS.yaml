@@ -1,0 +1,123 @@
+tasks:
+- id: MCP-01
+  title: Healthcheck & 2-stage progress UI
+  status: todo
+  touchpoints:
+  - src/ultimate_automation_system.py
+  accept:
+  - 환경 점검 결과를 초록/노랑/빨강으로 표기
+  - 전체% + 현재 스텝 진행 표시
+  - 실패 시 ZIP(스크린샷, logs, config, checkpoint) 자동 저장
+- id: MCP-02
+  title: Download completion verifier
+  status: todo
+  touchpoints:
+  - src/modules/web_automation.py
+  accept:
+  - 임시확장자 사라짐 + 파일 열기 성공 확인 후 다음 단계
+  - sleep 제거, timeout은 상한
+- id: MCP-03
+  title: 'Organizer: jpg/jpeg/png & single download folder'
+  status: todo
+  touchpoints:
+  - src/modules/data_processor.py
+  - config/config.yaml
+  accept:
+  - image_extensions에 jpg/jpeg/png 반영
+  - paths.download_folder만 스캔해 날짜 폴더로 이동
+- id: MCP-04
+  title: Checkpoint each item
+  status: todo
+  touchpoints:
+  - src/modules/web_automation.py
+  - config/config.yaml
+  accept:
+  - checkpoint_interval=1로 동작, 재실행 시 이어가기
+- id: MCP-05
+  title: LLM output = JSON meta + body & validator
+  status: todo
+  touchpoints:
+  - src/modules/ai_generator.py
+  - assets/templates/cold_email_prompt.txt
+  - config/config.yaml
+  accept:
+  - validate_email가 JSON 키 검사로 동작
+  - must_include 사용 안 함
+- id: MCP-06
+  title: Vertex temperature=0.3 applied
+  status: todo
+  touchpoints:
+  - src/modules/ai_generator.py
+  - config/config.yaml
+  accept:
+  - config 온도 0.3이 GenerationConfig로 전달
+- id: MCP-07
+  title: Tesseract OCR config mapping
+  status: todo
+  touchpoints:
+  - src/modules/ai_generator.py
+  - config/config.yaml
+  accept:
+  - psm/oem/config 값이 pytesseract 호출에 반영
+- id: MCP-08
+  title: Provider dropdown & key-gating
+  status: todo
+  touchpoints:
+  - src/ultimate_automation_system.py
+  accept:
+  - 키 없는 provider는 선택 불가
+- id: MCP-09
+  title: Implement missing helpers
+  status: todo
+  touchpoints:
+  - src/modules/ai_generator.py
+  - src/ultimate_automation_system.py
+  accept:
+  - create_prompt/_filter_ocr_by_region/resolve_paths/replace_env_vars/setup_logging
+    동작
+- id: MCP-10
+  title: Client discovery CSV bridge
+  status: todo
+  touchpoints:
+  - src/ultimate_automation_system.py
+  accept:
+  - company_name, product_name, url, contact로 원클릭 실행
+- id: MCP-11
+  title: Close tab after process (flag)
+  status: todo
+  touchpoints:
+  - src/modules/web_automation.py
+  - config/config.yaml
+  accept:
+  - 처리 완료 후 ctrl+w로 닫기, 옵션 on/off
+- id: MCP-12
+  title: Error taxonomy & bugpack ZIP
+  status: todo
+  touchpoints:
+  - src/modules/error_handler.py
+  - src/ultimate_automation_system.py
+  accept:
+  - 오류 코드 표준화, ZIP 자동화
+- id: MCP-13
+  title: Offline test harness
+  status: todo
+  touchpoints:
+  - tests/
+  - src/modules/image_matcher.py
+  - src/modules/data_processor.py
+  accept:
+  - 네트워크 없이 이미지·정리·DB 테스트 통과
+- id: MCP-14
+  title: Single-run / Step-run modes + smoke test
+  status: todo
+  touchpoints:
+  - src/ultimate_automation_system.py
+  accept:
+  - 1개만 실행 / 단계별 실행 버튼 제공, 스모크 패스
+- id: MCP-15
+  title: Docs & snapshots for /init handoff
+  status: todo
+  touchpoints:
+  - docs/*
+  accept:
+  - DECISIONS.md/TASKS.yaml/RUNBOOK.md/SPEC.md/design_snapshot.md 생성

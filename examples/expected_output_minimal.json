@@ -1,0 +1,17 @@
+{
+  "request_id": "demo-001",
+  "status": "completed",
+  "generated_at": "2025-09-22T09:00:00Z",
+  "summary": "Personalized outreach email drafted for Acme Analytics highlighting unified dashboards and faster reporting.",
+  "deliverables": {
+    "primary": "outputs/demo-001/email_draft.md",
+    "metadata": "outputs/demo-001/run_meta.json",
+    "attachments": [
+      "outputs/demo-001/analysis_summary.json"
+    ]
+  },
+  "next_steps": [
+    "Review draft tone with marketing lead",
+    "Schedule send through CRM automation flow"
+  ]
+}

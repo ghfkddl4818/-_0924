@@ -1,0 +1,24 @@
+{
+  "request_id": "demo-002",
+  "persona": "customer success lead",
+  "mode": "batch",
+  "items": [
+    {
+      "customer": "Nimbus Works",
+      "segment": "enterprise",
+      "signal": "renewal 45 days out",
+      "goal": "prepare proactive retention plan"
+    },
+    {
+      "customer": "Orbit Labs",
+      "segment": "growth",
+      "signal": "recent support escalation",
+      "goal": "rebuild trust with concise follow-up"
+    }
+  ],
+  "settings": {
+    "language": "en",
+    "tone": "supportive",
+    "max_tokens": 500
+  }
+}

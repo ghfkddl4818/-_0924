@@ -1,0 +1,24 @@
+system:
+  version: "3.0.0"
+  debug_mode: false
+  test_mode: false
+
+paths:
+  root_dir: "."
+  download_folder: "./downloads"
+  log_folder: "./logs"
+  output_folder: "./outputs"
+
+ai:
+  provider: "gemini"
+  api_key: null
+  models:
+    gemini:
+      model: "gemini-1.5-flash"
+      temperature: 0.3
+      max_tokens: 1000
+
+logging:
+  level: "INFO"
+  format: "[%(asctime)s][%(name)s][%(levelname)s] %(message)s"
+  file_rotation: "daily"

@@ -1,0 +1,19 @@
+{
+  "request_id": "demo-001",
+  "persona": "growth marketer",
+  "objective": "Draft a personalized outreach email introducing our analytics platform.",
+  "context": {
+    "company": "Acme Analytics",
+    "industry": "SaaS",
+    "pain_points": [
+      "fragmented dashboards",
+      "slow executive reporting"
+    ]
+  },
+  "artifacts": {
+    "input_files": [
+      "data/leads/acme_contacts.csv"
+    ],
+    "output_format": "markdown"
+  }
+}

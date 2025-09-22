@@ -1,0 +1,25 @@
+프로젝트: Ultimate Automation System v2.0
+목표: 고객사 URL → 웹 수집(이미지/리뷰) → 정리(DB/폴더) → Vertex(Gemini)로 콜드메일 생성까지 원클릭 E2E.
+작업 디렉토리: 루트. 코드는 src/ 하위에 생성.
+
+제약/기준:
+- config/config.yaml 외부화, Win10/11, Chrome, 1920x1080, UTF-8.
+- time.sleep 금지 → 파일/UI/네트워크 검증기.
+- checkpoint_interval=1, JPG/JPEG/PNG & XLSX 정리.
+- 출력 = JSON meta + email_body. 검증 = JSON 키 검사.
+- 런타임 LLM = Vertex(Gemini, temperature=0.3). Claude 분기는 후속.
+
+첨부:
+- docs/PRD.md (완전본)
+- MCP/TASKS.yaml (1~15 상태표)
+- MCP/OPEN_ISSUES.md (질문/보류)
+
+요청:
+1) MCP-01부터 순서대로 진행. 각 태스크는 작은 PR로.
+2) 매 태스크 결과: 변경 파일 목록 + 요약 + 테스트 방법 + 다음할 일 3개.
+3) src/ 및 config/ 하위에만 파일 생성.
+
+----- v2 추가(요약) -----
+프로젝트: Ultimate Automation System v2.0
+제약/기준 요약: 기존 키/경로 변경 금지, 대기=상한만, 완료=검증기, JPG/JPEG/PNG/XLSX, Tesseract config 전달, JSON meta 검사만, Tkinter는 메인 스레드.
+요청: MCP-01부터 순서대로 작은 PR 단위로 진행. 매 태스크 결과는 변경파일/요약/테스트/다음할일 3개 출력.

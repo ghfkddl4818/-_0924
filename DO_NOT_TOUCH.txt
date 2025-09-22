@@ -1,0 +1,8 @@
+data/raw/ 폴더는 수정하지 마세요.
+docs/ 디렉터리는 원본 유지.
+*.png 파일 편집 금지.
+*.jpg 파일 편집 금지.
+Keep data/raw/ untouched.
+Preserve docs/ in original state.
+Do not modify *.png assets.
+Do not modify *.jpg assets.
