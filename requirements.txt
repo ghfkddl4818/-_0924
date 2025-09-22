@@ -6,7 +6,7 @@ pandas
 openpyxl
 easyocr
 pytesseract
-google-generativeai
 pyyaml
 requests
 psutil
+google-cloud-aiplatform

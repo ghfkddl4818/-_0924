@@ -17,7 +17,10 @@ def test_load_config_uses_defaults() -> None:
 
     assert isinstance(config, AppConfig)
     assert config.system.version == "3.0.0"
-    assert config.ai.models["gemini"].temperature == 0.3
+    assert config.ai.vertex.project_id == "your-project-id"
+    assert config.ai.vertex.location == "us-central1"
+    assert config.ai.vertex.model.name == "gemini-2.5-pro"
+    assert config.ai.vertex.model.temperature == pytest.approx(0.3)
     assert config.logging.level == "INFO"
 
 
@@ -37,10 +40,12 @@ def test_load_config_rejects_unknown_keys(tmp_path: Path) -> None:
 def test_environment_overrides_are_applied() -> None:
     env = {
         "UAS_SYSTEM__DEBUG_MODE": "true",
-        "UAS_AI__MODELS__GEMINI__TEMPERATURE": "0.7",
+        "UAS_AI__VERTEX__MODEL__TEMPERATURE": "0.7",
+        "UAS_AI__VERTEX__LOCATION": "asia-northeast3",
     }
 
     config = load_config(env=env)
 
     assert config.system.debug_mode is True
-    assert config.ai.models["gemini"].temperature == pytest.approx(0.7)
+    assert config.ai.vertex.location == "asia-northeast3"
+    assert config.ai.vertex.model.temperature == pytest.approx(0.7)

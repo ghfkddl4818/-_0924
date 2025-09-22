@@ -113,14 +113,23 @@ class UltimateAutomationSystem:
 
         # Settings tab (provider dropdown & keys)
         self.set_tab = ttk.Frame(nb); nb.add(self.set_tab, text="⚙️ 설정")
-        ttk.Label(self.set_tab, text="Provider (런타임):").grid(row=0, column=0, sticky="e", padx=6, pady=6)
-        self.provider_var = tk.StringVar(value=self.config["ai"]["provider"])
-        prov = ttk.Combobox(self.set_tab, textvariable=self.provider_var, values=["gemini","claude","openai"], state="readonly")
+        ttk.Label(self.set_tab, text="Provider (Vertex AI):").grid(row=0, column=0, sticky="e", padx=6, pady=6)
+        self.provider_var = tk.StringVar(value=self.config.get("ai", {}).get("provider", "vertex"))
+        prov = ttk.Combobox(self.set_tab, textvariable=self.provider_var, values=["vertex"], state="readonly")
         prov.grid(row=0, column=1, sticky="w", padx=6, pady=6)
-        ttk.Label(self.set_tab, text="API Key:").grid(row=1, column=0, sticky="e", padx=6, pady=6)
-        self.apikey_var = tk.StringVar(value=self.config["ai"].get("api_key",""))
-        ttk.Entry(self.set_tab, textvariable=self.apikey_var, width=60, show="•").grid(row=1, column=1, sticky="w", padx=6, pady=6)
-        ttk.Button(self.set_tab, text="적용", command=self.apply_settings).grid(row=1, column=2, padx=6, pady=6)
+        ttk.Label(self.set_tab, text="Project ID:").grid(row=1, column=0, sticky="e", padx=6, pady=6)
+        self.project_var = tk.StringVar(value=self.config.get("ai", {}).get("vertex", {}).get("project_id", ""))
+        ttk.Entry(self.set_tab, textvariable=self.project_var, width=60).grid(row=1, column=1, sticky="w", padx=6, pady=6)
+        ttk.Label(self.set_tab, text="Location:").grid(row=2, column=0, sticky="e", padx=6, pady=6)
+        self.location_var = tk.StringVar(value=self.config.get("ai", {}).get("vertex", {}).get("location", ""))
+        ttk.Entry(self.set_tab, textvariable=self.location_var, width=60).grid(row=2, column=1, sticky="w", padx=6, pady=6)
+        ttk.Label(self.set_tab, text="Model name:").grid(row=3, column=0, sticky="e", padx=6, pady=6)
+        self.model_name_var = tk.StringVar(value=self.config.get("ai", {}).get("vertex", {}).get("model", {}).get("name", ""))
+        ttk.Entry(self.set_tab, textvariable=self.model_name_var, width=60).grid(row=3, column=1, sticky="w", padx=6, pady=6)
+        ttk.Label(self.set_tab, text="Credentials path:").grid(row=4, column=0, sticky="e", padx=6, pady=6)
+        self.credentials_path_var = tk.StringVar(value=self.config.get("ai", {}).get("vertex", {}).get("credentials_path", ""))
+        ttk.Entry(self.set_tab, textvariable=self.credentials_path_var, width=60).grid(row=4, column=1, sticky="w", padx=6, pady=6)
+        ttk.Button(self.set_tab, text="적용", command=self.apply_settings).grid(row=4, column=2, padx=6, pady=6)
 
         # Pipeline tab
         self.pipeline_tab = ttk.Frame(nb); nb.add(self.pipeline_tab, text="Pipeline")
@@ -301,11 +310,25 @@ class UltimateAutomationSystem:
         missing = [x for x in required if not Path(x).exists()]
         # provider gating
         prov = self.provider_var.get()
-        key = self.apikey_var.get().strip()
-        if prov != "gemini":
-            issues.append("현재 빌드는 Vertex(Gemini)만 활성. Claude/OpenAI는 후속.")
-        if not key:
-            issues.append("API Key 미설정(설정 탭에서 입력).")
+        project = self.project_var.get().strip()
+        location = self.location_var.get().strip()
+        model_name = self.model_name_var.get().strip()
+        credentials_input = self.credentials_path_var.get().strip()
+        credential_env = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if prov != "vertex":
+            issues.append("현재 빌드는 Vertex AI Gemini만 지원합니다.")
+        if not project:
+            issues.append("프로젝트 ID를 입력해주세요.")
+        if not location:
+            issues.append("리전을 입력해주세요.")
+        if not model_name:
+            issues.append("모델 이름을 입력해주세요.")
+        if credentials_input:
+            cred_path = Path(credentials_input)
+            if not cred_path.exists():
+                issues.append(f"서비스 계정 키 파일을 찾을 수 없습니다: {cred_path}")
+        elif not credential_env:
+            issues.append("서비스 계정 키 경로를 입력하거나 GOOGLE_APPLICATION_CREDENTIALS 환경변수를 설정해주세요.")
         if missing:
             issues.append(f"템플릿 이미지 없음: {missing}")
         color = "초록(정상)" if not issues else "빨강(문제)"
@@ -339,13 +362,19 @@ class UltimateAutomationSystem:
 
     def apply_settings(self):
         # Session-only override
-        self.config["ai"]["provider"] = self.provider_var.get()
-        self.config["ai"]["api_key"] = self.apikey_var.get().strip()
+        ai_conf = self.config.setdefault("ai", {})
+        ai_conf["provider"] = self.provider_var.get()
+        vertex_conf = ai_conf.setdefault("vertex", {})
+        vertex_conf["project_id"] = self.project_var.get().strip()
+        vertex_conf["location"] = self.location_var.get().strip() or "us-central1"
+        vertex_conf["credentials_path"] = self.credentials_path_var.get().strip()
+        model_conf = vertex_conf.setdefault("model", {})
+        model_conf["name"] = self.model_name_var.get().strip() or model_conf.get("name", "")
         messagebox.showinfo(
             "설정",
-            "지금 실행에만 적용됐어요. 닫았다가 다시 열면 config/config.yaml의 값이 사용되니 필요하면 파일도 함께 업데이트해주세요.",
+            "지금 실행에만 적용돼요. 파일에도 반영하려면 config/config.yaml을 직접 수정해주세요.",
         )
-        messagebox.showinfo("설정", "세션 설정 적용됨(파일은 변경하지 않음).")
+        messagebox.showinfo("설정", "설정이 메모리에 반영되었습니다 (파일에는 자동 저장되지 않음).")
 
     def on_start(self):
         if self.state["running"]:

@@ -30,16 +30,28 @@ class PathsConfig(BaseModel):
 
 class ModelSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    model: str
+    name: str
     temperature: float = 0.3
-    max_tokens: int = 1000
+    max_output_tokens: int = 1000
+    top_p: float | None = None
+    top_k: int | None = None
+
+
+class VertexConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str
+    location: str
+    model: ModelSettings
+    credentials_path: Path | None = None
 
 
 class AIConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     provider: str
+    vertex: VertexConfig
     api_key: str | None = None
-    models: dict[str, ModelSettings]
+    generation: dict[str, Any] = Field(default_factory=dict)
+    prompt: dict[str, Any] = Field(default_factory=dict)
 
 
 class LoggingConfig(BaseModel):

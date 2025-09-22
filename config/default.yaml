@@ -10,13 +10,16 @@ paths:
   output_folder: "./outputs"
 
 ai:
-  provider: "gemini"
-  api_key: null
-  models:
-    gemini:
-      model: "gemini-1.5-flash"
+  provider: "vertex"
+  vertex:
+    project_id: "your-project-id"
+    location: "us-central1"
+    credentials_path: "./config/vertex-service-account.json"
+    model:
+      name: "gemini-2.5-pro"
       temperature: 0.3
-      max_tokens: 1000
+      max_output_tokens: 1000
+      top_p: 0.9
 
 logging:
   level: "INFO"
