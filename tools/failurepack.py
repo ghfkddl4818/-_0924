@@ -44,8 +44,17 @@ def create_failure_pack(
             if root is not None and root.exists():
                 for file_path in _iter_files(root):
                     arcname = Path(name) / file_path.relative_to(root)
-                    archive.write(file_path, arcname.as_posix())
-                    archived_files.append(arcname.as_posix())
+                    arcname_str = arcname.as_posix()
+                    if file_path.suffix in {".log", ".txt", ".json", ".yaml", ".yml", ""}:
+                        _write_text_entry(archive, file_path, arcname_str)
+                    else:
+                        try:
+                            text = file_path.read_text(encoding="utf-8")
+                        except (UnicodeDecodeError, OSError):
+                            archive.write(file_path, arcname_str)
+                        else:
+                            _write_text_entry(archive, file_path, arcname_str, text)
+                    archived_files.append(arcname_str)
             manifest["sections"][name] = archived_files
         archive.writestr(
             "manifest.json",
@@ -69,6 +78,21 @@ def _optional_path(value: Path | str | None) -> Path | None:
 
 def _default_zip_factory(path: Path) -> ZipFile:
     return ZipFile(path, mode="w", compression=ZIP_DEFLATED)
+
+
+def _write_text_entry(
+    archive: ZipFile,
+    file_path: Path,
+    arcname: str,
+    text: str | None = None,
+) -> None:
+    try:
+        content = text if text is not None else file_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        archive.write(file_path, arcname)
+        return
+    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+    archive.writestr(arcname, normalized)
 
 
 __all__ = ["create_failure_pack"]

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import io
+import json
+import os
+import shutil
 import threading
 import time
-import os
-import json
-import shutil
+import traceback
 import zipfile
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import NoReturn
 
 import yaml
@@ -33,6 +35,8 @@ from modules.web_automation import WebAutomation
 from modules.data_processor import DataProcessor
 from modules.ai_generator import AIGenerator
 from modules.error_handler import ErrorHandler
+from pipeline.cli import STAGES
+from pipeline.segment_cli import run_range, run_stage
 
 class UltimateAutomationSystem:
     def __init__(self):
@@ -118,6 +122,10 @@ class UltimateAutomationSystem:
         ttk.Entry(self.set_tab, textvariable=self.apikey_var, width=60, show="•").grid(row=1, column=1, sticky="w", padx=6, pady=6)
         ttk.Button(self.set_tab, text="적용", command=self.apply_settings).grid(row=1, column=2, padx=6, pady=6)
 
+        # Pipeline tab
+        self.pipeline_tab = ttk.Frame(nb); nb.add(self.pipeline_tab, text="Pipeline")
+        self._build_pipeline_tab(self.pipeline_tab)
+
         # Stats
         self.stats_var = tk.StringVar(value="성공:0 | 실패:0 | 스킵:0 | ETA:--:--")
         ttk.Label(main, textvariable=self.stats_var).pack(anchor="w")
@@ -125,6 +133,159 @@ class UltimateAutomationSystem:
     def gui_log_callback(self, level, msg):
         self.log_text.insert("end", f"[{level}] {msg}\n")
         self.log_text.see("end")
+
+    # ---------- Pipeline controls ----------
+    def _build_pipeline_tab(self, parent):
+        controls = ttk.LabelFrame(parent, text="파이프라인 실행", padding=10)
+        controls.pack(fill="x", padx=6, pady=6)
+
+        default_input = (Path("tests/fixtures").resolve())
+        self.pipeline_input_var = tk.StringVar(value=str(default_input))
+        ttk.Label(controls, text="입력 경로").grid(row=0, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(controls, textvariable=self.pipeline_input_var, width=60).grid(row=0, column=1, columnspan=4, sticky="we", padx=4, pady=4)
+        ttk.Button(controls, text="파일 선택", command=self.on_pipeline_browse_file, width=12).grid(row=0, column=5, padx=4)
+        ttk.Button(controls, text="폴더 선택", command=self.on_pipeline_browse_dir, width=14).grid(row=0, column=6, padx=4)
+
+        ttk.Label(controls, text="처리 개수").grid(row=1, column=0, sticky="e", padx=4, pady=4)
+        self.pipeline_limit_var = tk.StringVar()
+        ttk.Entry(controls, textvariable=self.pipeline_limit_var, width=10).grid(row=1, column=1, sticky="w", padx=4, pady=4)
+
+        ttk.Label(controls, text="언어").grid(row=1, column=2, sticky="e", padx=4, pady=4)
+        self.pipeline_language_var = tk.StringVar(value="en")
+        ttk.Entry(controls, textvariable=self.pipeline_language_var, width=10).grid(row=1, column=3, sticky="w", padx=4, pady=4)
+
+        stage_frame = ttk.LabelFrame(parent, text="단일 단계 실행", padding=10)
+        stage_frame.pack(fill="x", padx=6, pady=6)
+        self.pipeline_stage_var = tk.StringVar(value=STAGES[0])
+        ttk.Label(stage_frame, text="단계").grid(row=0, column=0, padx=4, pady=4)
+        ttk.Combobox(stage_frame, textvariable=self.pipeline_stage_var, values=list(STAGES), state="readonly", width=15).grid(row=0, column=1, padx=4, pady=4)
+        self.pipeline_stage_status = tk.StringVar(value="대기 중")
+        self.pipeline_stage_button = ttk.Button(stage_frame, text="Run 단계", command=self.on_pipeline_run_stage, width=14)
+        self.pipeline_stage_button.grid(row=0, column=2, padx=6, pady=4)
+        ttk.Label(stage_frame, textvariable=self.pipeline_stage_status).grid(row=0, column=3, padx=4, pady=4)
+
+        range_frame = ttk.LabelFrame(parent, text="단계 Range", padding=10)
+        range_frame.pack(fill="x", padx=6, pady=6)
+        self.pipeline_from_var = tk.StringVar(value=STAGES[0])
+        self.pipeline_to_var = tk.StringVar(value=STAGES[-1])
+        ttk.Label(range_frame, text="시작 단계").grid(row=0, column=0, padx=4, pady=4)
+        ttk.Combobox(range_frame, textvariable=self.pipeline_from_var, values=list(STAGES), state="readonly", width=15).grid(row=0, column=1, padx=4, pady=4)
+        ttk.Label(range_frame, text="마지막 단계").grid(row=0, column=2, padx=4, pady=4)
+        ttk.Combobox(range_frame, textvariable=self.pipeline_to_var, values=list(STAGES), state="readonly", width=15).grid(row=0, column=3, padx=4, pady=4)
+        self.pipeline_range_status = tk.StringVar(value="대기 중")
+        self.pipeline_range_button = ttk.Button(range_frame, text="구간 실행", command=self.on_pipeline_run_range, width=14)
+        self.pipeline_range_button.grid(row=0, column=4, padx=6, pady=4)
+        ttk.Label(range_frame, textvariable=self.pipeline_range_status).grid(row=0, column=5, padx=4, pady=4)
+
+        output_frame = ttk.LabelFrame(parent, text="실행 결과", padding=10)
+        output_frame.pack(fill="both", expand=True, padx=6, pady=6)
+        self.pipeline_output = tk.Text(output_frame, height=16)
+        self.pipeline_output.pack(fill="both", expand=True)
+
+    def on_pipeline_browse_file(self):
+        selection = filedialog.askopenfilename(title="Select HTML file", filetypes=[("HTML", "*.html;*.htm"), ("All", "*.*")])
+        if selection:
+            self.pipeline_input_var.set(selection)
+
+    def on_pipeline_browse_dir(self):
+        selection = filedialog.askdirectory(title="Select input folder")
+        if selection:
+            self.pipeline_input_var.set(selection)
+
+    def on_pipeline_run_stage(self):
+        ok, limit = self._parse_pipeline_limit()
+        if not ok:
+            return
+        stage = self.pipeline_stage_var.get()
+        self._kickoff_pipeline(mode="stage", stage=stage, from_stage=None, to_stage=None, limit=limit)
+
+    def on_pipeline_run_range(self):
+        ok, limit = self._parse_pipeline_limit()
+        if not ok:
+            return
+        from_stage = self.pipeline_from_var.get()
+        to_stage = self.pipeline_to_var.get()
+        if STAGES.index(from_stage) > STAGES.index(to_stage):
+            messagebox.showerror("Pipeline", "시작 단계가 종료 단계보다 뒤에 있을 수 없습니다.")
+            return
+        self._kickoff_pipeline(mode="range", stage=None, from_stage=from_stage, to_stage=to_stage, limit=limit)
+
+    def _parse_pipeline_limit(self):
+        raw = (self.pipeline_limit_var.get() or "").strip()
+        if not raw:
+            return True, None
+        try:
+            value = int(raw, 10)
+        except ValueError:
+            messagebox.showerror("Pipeline", "처리 개수는 숫자여야 합니다.")
+            return False, None
+        if value <= 0:
+            messagebox.showerror("Pipeline", "처리 개수는 1 이상 입력해야 합니다.")
+            return False, None
+        return True, value
+
+    def _kickoff_pipeline(self, *, mode: str, stage: str | None, from_stage: str | None, to_stage: str | None, limit: int | None):
+        input_path = Path(self.pipeline_input_var.get()).expanduser()
+        if not input_path.exists():
+            messagebox.showerror("Pipeline", f"입력 경로를 찾을 수 없습니다: {input_path}")
+            return
+        language = (self.pipeline_language_var.get() or "en").strip() or "en"
+
+        self.pipeline_output.delete("1.0", "end")
+        self.pipeline_output.insert("end", "실행 중...\n")
+        self.pipeline_stage_button.config(state="disabled")
+        self.pipeline_range_button.config(state="disabled")
+        self.pipeline_stage_status.set("실행 중")
+        self.pipeline_range_status.set("실행 중")
+
+        def worker():
+            buffer = io.StringIO()
+            status = ""
+            try:
+                if mode == "stage" and stage:
+                    count = run_stage(
+                        stage,
+                        input_path=input_path,
+                        limit=limit,
+                        language=language,
+                        stream=buffer,
+                    )
+                    status = f"단계 실행 완료 ({count}건)"
+                elif mode == "range" and from_stage and to_stage:
+                    count = run_range(
+                        from_stage=from_stage,
+                        to_stage=to_stage,
+                        input_path=input_path,
+                        limit=limit,
+                        language=language,
+                        stream=buffer,
+                    )
+                    status = f"구간 실행 완료 ({count}건)"
+                else:
+                    raise ValueError("잘못된 실행 모드")
+                output = buffer.getvalue().strip() or "결과가 없습니다."
+            except Exception as exc:
+                output = f"[오류] {exc}\n{traceback.format_exc()}"
+                status = "실패"
+
+            def finalize():
+                self.pipeline_output.delete("1.0", "end")
+                self.pipeline_output.insert("end", output + "\n")
+                self.pipeline_output.see("end")
+                if mode == "stage":
+                    self.pipeline_stage_status.set(status)
+                else:
+                    self.pipeline_stage_status.set("대기 중")
+                if mode == "range":
+                    self.pipeline_range_status.set(status)
+                else:
+                    self.pipeline_range_status.set("대기 중")
+                self.pipeline_stage_button.config(state="normal")
+                self.pipeline_range_button.config(state="normal")
+
+            self.root.after(0, finalize)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # ---------- Actions ----------
     def on_healthcheck(self):
@@ -153,7 +314,9 @@ class UltimateAutomationSystem:
     def on_bugpack(self):
         # Collect logs/config/checkpoint/screenshot (optional)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        zpath = Path("runs") / f"bugpack_{ts}.zip"
+        runs_dir = Path("runs")
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        zpath = runs_dir / f"bugpack_{ts}.zip"
         with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
             for p in ["logs", "config/config.yaml", "data/checkpoint"]:
                 pth = Path(p)
@@ -178,6 +341,10 @@ class UltimateAutomationSystem:
         # Session-only override
         self.config["ai"]["provider"] = self.provider_var.get()
         self.config["ai"]["api_key"] = self.apikey_var.get().strip()
+        messagebox.showinfo(
+            "설정",
+            "지금 실행에만 적용됐어요. 닫았다가 다시 열면 config/config.yaml의 값이 사용되니 필요하면 파일도 함께 업데이트해주세요.",
+        )
         messagebox.showinfo("설정", "세션 설정 적용됨(파일은 변경하지 않음).")
 
     def on_start(self):
@@ -245,10 +412,6 @@ class UltimateAutomationSystem:
         except Exception:
             print(f"[{level}] {msg}")
         self.gui_log_callback(level, msg)
-
-    def gui_log_callback(self, level, msg):
-        # replaced by handler attach
-        pass
 
 def main():
     app = UltimateAutomationSystem()
