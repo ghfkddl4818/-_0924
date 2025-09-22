@@ -25,7 +25,8 @@ class EnhancedImageMatcher:
             return False
         start = time.time()
         attempt = 0
-        while attempt < retry and (time.time()-start) < timeout:
+        deadline = None if timeout <= 0 else start + timeout
+        while True:
             pos = self._find_image(tmpl, confidence, region)
             if pos:
                 x = pos[0] + click_offset[0]
@@ -33,8 +34,45 @@ class EnhancedImageMatcher:
                 pyautogui.click(x, y)
                 time.sleep(wait_after)
                 return True
-            time.sleep(0.3)
             attempt += 1
+            if deadline is not None and time.time() >= deadline:
+                break
+            if deadline is None and retry > 0 and attempt >= retry:
+                break
+            time.sleep(0.3)
+        return False
+
+    def exists(self, template_path: str, confidence: float,
+               region: Optional[List[int]] = None) -> bool:
+        tmpl = self._load_template(template_path)
+        if tmpl is None:
+            return False
+        return self._find_image(tmpl, confidence, region) is not None
+
+    def wait_until_visible(self, template_path: str, confidence: float, timeout: float = 10.0,
+                           interval: float = 0.3, region: Optional[List[int]] = None) -> bool:
+        """Wait until the template becomes visible or timeout elapses."""
+        tmpl = self._load_template(template_path)
+        if tmpl is None:
+            return False
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._find_image(tmpl, confidence, region):
+                return True
+            time.sleep(interval)
+        return False
+
+    def wait_until_missing(self, template_path: str, confidence: float, timeout: float = 10.0,
+                           interval: float = 0.3, region: Optional[List[int]] = None) -> bool:
+        """Wait until the template disappears from the screen."""
+        tmpl = self._load_template(template_path)
+        if tmpl is None:
+            return False
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._find_image(tmpl, confidence, region) is None:
+                return True
+            time.sleep(interval)
         return False
 
     def _find_image(self, template, confidence: float, region: Optional[List[int]]):

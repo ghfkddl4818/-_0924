@@ -55,18 +55,68 @@ web_automation:
       save_button: assets/img/fireshot_save.png
       confidence: 0.9
       timeout: 5.0
+      pre_wait: 1.0
       wait_after: 3.0
+      post_wait_timeout: 20.0
+      post_wait_interval: 0.5
+      post_wait_confidence: 0.7
+      progress_template: assets/img/fireshot_progress.png
+      progress_confidence: 0.75
+      completion_template: assets/img/fireshot_done.png
+      completion_confidence: 0.85
+      save_tab_template: assets/img/fireshot_save_tab.png
+      save_tab_confidence: 0.8
+      product_tab_template: assets/img/product_tab_active.png
+      product_tab_confidence: 0.85
+      auto_close_tab: true
+      tab_close_wait: 0.5
+      tab_close_timeout: 10.0
+      tab_poll_interval: 0.5
     analysis:
-      start: assets/img/analysis_start.png
-      excel: assets/img/excel_download.png
       confidence: 0.85
+      default_retry: 8
+      default_timeout: 30.0
       wait_between: 1.5
       download_timeout: 45.0
+      sort_popup:
+        trigger_hotkey: ctrl+shift+a
+        detector: assets/img/popup_context.png
+        confidence: 0.8
+        timeout: 25.0
+        wait_after_trigger: 0.5
+      review_button:
+        template: assets/img/review_button.png
+        confidence: 0.85
+        retry: 12
+        timeout: 35.0
+        wait_after: 0.5
+      analysis_start:
+        template: assets/img/analysis_start.png
+        confidence: 0.85
+        retry: 10
+        timeout: 45.0
+        wait_after: 1.0
+      excel_download:
+        template: assets/img/excel_download.png
+        confidence: 0.85
+        retry: 15
+        timeout: 60.0
+        wait_after: 1.0
+      crawling_tool:
+        template: assets/img/crawling_tool.png
+        confidence: 0.85
+        retry: 10
+        timeout: 35.0
+        wait_after: 1.0
+      review_disappear_check:
+        timeout: 15.0
+        poll_interval: 0.5
     navigation:
       next_tab: ctrl+tab
       prev_tab: ctrl+shift+tab
       close_tab: ctrl+w
   scrolling:
+    initial_scroll: 1
     amount: 500
     max_scrolls: 16
     wait_between: 0.5

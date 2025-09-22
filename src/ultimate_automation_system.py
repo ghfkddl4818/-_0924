@@ -10,7 +10,7 @@ import traceback
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, Dict, List, NoReturn, Optional
 
 import yaml
 
@@ -63,6 +63,9 @@ class UltimateAutomationSystem:
             "start_time": None, "eta": "--:--"
         }
 
+        self.product_payloads: List[Dict[str, Any]] = []
+        self.latest_payload: Optional[Dict[str, Any]] = None
+
         # GUI
         self.root = tk.Tk()
         self.root.title(self.config["gui"]["window"]["title"])
@@ -73,7 +76,14 @@ class UltimateAutomationSystem:
         self.error_handler = ErrorHandler(self.config, self.log)
         self.data_processor = DataProcessor(self.config, self.log)
         self.ai_generator = AIGenerator(self.config, self.log)
-        self.web_automation = WebAutomation(self.config, self.log, self.set_step, self.on_item_done)
+        self.web_automation = WebAutomation(
+            self.config,
+            self.log,
+            self.set_step,
+            self.on_item_done,
+            data_processor=self.data_processor,
+            payload_callback=self._on_product_payload,
+        )
 
         # Hotkeys (optional)
         self.root.bind("<F5>", lambda e: self.on_start())
@@ -305,8 +315,15 @@ class UltimateAutomationSystem:
             if not p.exists():
                 issues.append(f"경로 생성 실패: {p}")
         # images
-        required = ["assets/img/detail_button.png","assets/img/fireshot_save.png",
-                    "assets/img/analysis_start.png","assets/img/excel_download.png"]
+        required = [
+            "assets/img/detail_button.png",
+            "assets/img/fireshot_save.png",
+            "assets/img/review_button.png",
+            "assets/img/analysis_start.png",
+            "assets/img/excel_download.png",
+            "assets/img/crawling_tool.png",
+            "assets/img/popup_context.png",
+        ]
         missing = [x for x in required if not Path(x).exists()]
         # provider gating
         prov = self.provider_var.get()
@@ -400,7 +417,8 @@ class UltimateAutomationSystem:
             self.state["current_product"] = idx + 1
             self.update_overall(idx, total)
 
-            ok = self.web_automation.process_single_product(idx)
+            product_ctx = self._build_product_context(idx)
+            ok = self.web_automation.process_single_product(idx, product_ctx)
             if ok:
                 self.state["success"] += 1
             else:
@@ -411,6 +429,25 @@ class UltimateAutomationSystem:
 
         self.set_step("DONE")
         self.state["running"] = False
+
+    def _on_product_payload(self, payload: Dict[str, Any]) -> None:
+        self.latest_payload = payload
+        self.product_payloads.append(payload)
+        product_id = payload.get("product_id")
+        product_name = payload.get("product_name", "")
+        self.log("INFO", f"Cold-email payload ready (product_id={product_id}, name='{product_name}')")
+
+    def _build_product_context(self, idx: int) -> Dict[str, Any]:
+        context: Dict[str, Any] = {
+            "product_id": idx + 1,
+        }
+        catalog = self.config.get("web_automation", {}).get("product_catalog")
+        if isinstance(catalog, list) and idx < len(catalog):
+            candidate = catalog[idx]
+            if isinstance(candidate, dict):
+                context.update(candidate)
+        context.setdefault("product_name", f"Product {idx + 1:03d}")
+        return context
 
     # ---------- Helpers ----------
     def set_step(self, step, step_progress=None):
