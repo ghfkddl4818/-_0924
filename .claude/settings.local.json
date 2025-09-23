@@ -18,7 +18,9 @@
       "Bash(git restore:*)",
       "Bash(git lfs:*)",
       "Bash(powershell:*)",
-      "Bash(git remote get-url:*)"
+      "Bash(git remote get-url:*)",
+      "Bash(findstr:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []
