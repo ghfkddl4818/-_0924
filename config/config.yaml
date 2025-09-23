@@ -38,7 +38,7 @@ web_automation:
   buttons:
     detail:
       primary: assets/img/detail_button.png
-      alternative: assets/img/detail_button_alt.png
+      # alternative: assets/img/detail_button_alt.png
       confidence: 0.85
       retry: 5
       wait_after: 2.0
@@ -53,8 +53,8 @@ web_automation:
     fireshot:
       trigger_key: ctrl+shift+s
       save_button: assets/img/fireshot_save.png
-      confidence: 0.9
-      timeout: 5.0
+      confidence: 0.8
+      timeout: 0
       pre_wait: 1.0
       wait_after: 3.0
       post_wait_timeout: 20.0
@@ -118,7 +118,7 @@ web_automation:
   scrolling:
     initial_scroll: 1
     amount: 500
-    max_scrolls: 16
+    max_scrolls: 32
     wait_between: 0.5
     smooth_scroll: true
   error_handling:
@@ -187,6 +187,7 @@ ai:
     timeout: 45
     exponential_backoff: true
     batch_size: 5
+    max_api_calls: 30
   prompt:
     template_file: 상세페이지 기획안 작성 프롬프트 (자연어 버전).md
     tone: professional

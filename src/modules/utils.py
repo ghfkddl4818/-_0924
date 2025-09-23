@@ -23,18 +23,23 @@ def resolve_paths(config: dict):
         return str((base / p).resolve())
     # only essential paths
     pconf = config.get("paths", {})
-    for k in ["download_folder","work_folder","storage_folder","output_folder","log_folder","checkpoint_folder"]:
+    for k in ["download_folder","work_folder","storage_folder","collection_root","output_folder","log_folder","checkpoint_folder"]:
         if k in pconf:
             pconf[k] = _resolve(pconf[k])
 
 def ensure_dirs(config: dict):
     from pathlib import Path
-    for p in [
-        config["paths"]["download_folder"],
-        config["paths"]["work_folder"],
-        config["paths"]["storage_folder"],
-        config["paths"]["output_folder"],
-        config["paths"]["log_folder"],
-        config["paths"]["checkpoint_folder"],
+
+    path_conf = config.get("paths", {})
+    for key in [
+        "download_folder",
+        "work_folder",
+        "storage_folder",
+        "collection_root",
+        "output_folder",
+        "log_folder",
+        "checkpoint_folder",
     ]:
-        Path(p).mkdir(parents=True, exist_ok=True)
+        value = path_conf.get(key)
+        if value:
+            Path(value).mkdir(parents=True, exist_ok=True)

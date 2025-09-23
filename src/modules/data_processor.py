@@ -1,6 +1,5 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import hashlib
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -21,14 +20,6 @@ _DB_COLUMNS: List[str] = [
     "이메일생성",
     "비고",
 ]
-
-
-def _slugify(text: str) -> str:
-    slug = ''.join(ch if ch.isalnum() else '-' for ch in text)
-    slug = slug.strip('-')
-    while '--' in slug:
-        slug = slug.replace('--', '-')
-    return slug.lower() or 'product'
 
 
 class ExcelDBManager:
@@ -85,6 +76,8 @@ class ExcelDBManager:
 
 
 class DataProcessor:
+    _INVALID_CHARS = '<>:"/\\|?*'
+
     def __init__(self, config: dict, log_callback):
         self.c = config
         self.log = log_callback
@@ -93,7 +86,6 @@ class DataProcessor:
             self.c["database"]["sheet_name"],
             log_callback,
         )
-        self.hash_cache: Dict[str, str] = {}
 
     def process_product(self, idx: int, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         metadata = metadata or {}
@@ -110,38 +102,48 @@ class DataProcessor:
         features = metadata.get("features") or metadata.get("highlights") or ""
         review_summary = metadata.get("review_summary") or metadata.get("summary") or ""
         collected_at = metadata.get("collected_at") or datetime.now().strftime("%Y-%m-%d")
-        slug = metadata.get("slug") or _slugify(f"{product_name}-{product_id}")
+        store_name = self._determine_store_name(metadata)
 
         self.log(
             "INFO",
-            f"사후 처리 시작: product_id={product_id}, name='{product_name}', slug='{slug}'",
+            f"사후 처리 시작: product_id={product_id}, name='{product_name}', store='{store_name}'",
         )
 
-        assets = self.organize(product_slug=slug, date=collected_at)
+        assets = self.organize(
+            product_id=product_id,
+            product_name=product_name,
+            store_name=store_name,
+            date=collected_at,
+        )
+        images_count = len(assets.get("images", []))
+        texts_count = len(assets.get("review_texts", []))
         self.log(
             "INFO",
-            f"파일 정리 완료: images={len(assets['images'])}, reviews={len(assets['reviews'])}",
+            f"파일 정리 완료: images={images_count}, texts={texts_count}, base='{assets.get('base_dir', '')}'",
         )
+        if images_count or texts_count:
+            self.log("SUCCESS", f"정리 성공: product_id={product_id}, store='{store_name}'")
+        else:
+            self.log("WARNING", f"이동할 파일이 없습니다: product_id={product_id}, store='{store_name}'")
 
         db_row = self._build_db_row(
-            date=collected_at,
+            date=self._normalize_date_for_db(collected_at),
             product_id=product_id,
             product_name=product_name,
             brand=brand,
             price=price,
             review_count=review_count,
             rating=rating,
-            status="완료",
-            email_status="대기",
+            status=metadata.get("status", "완료"),
+            email_status=metadata.get("email_status", "N"),
             note=metadata.get("note", ""),
         )
-        db_ok = self.db.add_product(db_row)
-        if db_ok:
-            self.log("INFO", f"DB 업데이트 완료: product_id={product_id}")
+        if self.db.add_product(db_row):
+            self.log("INFO", "DB 업데이트 완료")
         else:
-            self.log("ERROR", f"DB 업데이트 실패: product_id={product_id}")
+            self.log("ERROR", "DB 업데이트 실패")
 
-        email_payload = self._build_email_payload(
+        payload = self._build_email_payload(
             product_id=product_id,
             product_name=product_name,
             brand=brand,
@@ -153,77 +155,167 @@ class DataProcessor:
             assets=assets,
             metadata=metadata,
             collected_at=collected_at,
+            store_name=store_name,
         )
-        self.log("INFO", f"콜드메일 페이로드 준비 완료: product_id={product_id}")
+        payload["store_name"] = store_name
+        payload["collection_directory"] = assets.get("base_dir", "")
+        return payload
 
-        return {
-            "product_id": product_id,
-            "product_name": product_name,
-            "brand": brand,
-            "price": price,
-            "rating": rating,
-            "review_count": review_count,
-            "features": features,
-            "review_summary": review_summary,
-            "collected_at": collected_at,
-            "slug": slug,
-            "assets": assets,
-            "db_row": db_row,
-            "db_ok": db_ok,
-            "email_payload": email_payload,
-            "metadata": metadata,
-        }
+    def organize(
+        self,
+        *,
+        product_id: int,
+        product_name: str,
+        store_name: str,
+        date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        date_folder = self._normalize_date(date)
+        store_dir = self._sanitize_component(store_name, default="UnknownStore")
+        base_dir = self._collection_root() / date_folder / store_dir
+        base_dir.mkdir(parents=True, exist_ok=True)
+        base_filename = self._build_base_filename(product_id, product_name, store_name)
 
-    def organize(self, product_slug: str, date: Optional[str] = None) -> Dict[str, Any]:
-        date = date or datetime.now().strftime("%Y-%m-%d")
-        storage_root = Path(self.c["paths"]["storage_folder"])
-        base_dir = storage_root / date / product_slug
-        images_dir = base_dir / "images"
-        reviews_dir = base_dir / "reviews"
+        download_dir = Path(self.c["paths"]["download_folder"])
+        if not download_dir.exists():
+            self.log("ERROR", f"다운로드 폴더를 찾을 수 없습니다: {download_dir}")
+            return {
+                "base_dir": str(base_dir),
+                "images": [],
+                "reviews": [],
+                "review_texts": [],
+                "review_excels": [],
+            }
 
-        images = self._move_files(self._img_exts(), images_dir)
-        reviews = self._move_files(["xlsx", "xls"], reviews_dir)
+        image_sources = self._collect_files(download_dir, self._img_exts())
+        excel_sources = self._collect_files(download_dir, ["xlsx", "xls"])
+
+        moved_images = self._move_files_with_base(image_sources, base_dir, base_filename, "IMAGE")
+        moved_excels = self._move_files_with_base(excel_sources, base_dir, base_filename, "EXCEL")
+
+        txt_files: List[Path] = []
+        for excel_path in moved_excels:
+            txt_path = excel_path.with_suffix('.txt')
+            if self._convert_excel_to_txt(excel_path, txt_path):
+                txt_files.append(txt_path)
 
         return {
             "base_dir": str(base_dir),
-            "images": [str(p) for p in images],
-            "reviews": [str(p) for p in reviews],
+            "images": [str(p) for p in moved_images],
+            "reviews": [str(p) for p in txt_files],
+            "review_texts": [str(p) for p in txt_files],
+            "review_excels": [str(p) for p in moved_excels],
         }
 
     def _img_exts(self) -> List[str]:
         return ["jpg", "jpeg", "png"]
 
-    def _move_files(self, exts: List[str], destination: Path) -> List[Path]:
-        source = Path(self.c["paths"]["download_folder"])
-        destination.mkdir(parents=True, exist_ok=True)
+    def _collect_files(self, folder: Path, extensions: List[str]) -> List[Path]:
+        allowed = {f'.{ext.lower()}' for ext in extensions}
+        files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in allowed]
+        return sorted(files)
+
+    def _move_files_with_base(
+        self,
+        files: List[Path],
+        destination: Path,
+        base_name: str,
+        category: str,
+    ) -> List[Path]:
         moved: List[Path] = []
-        for ext in exts:
-            for file_path in sorted(source.glob(f"*.{ext}")):
-                target = destination / self._build_unique_name(file_path)
-                try:
-                    shutil.move(str(file_path), str(target))
-                    moved.append(target)
-                    self.log("INFO", f"파일 이동: {file_path.name} -> {target}")
-                except Exception as exc:
-                    self.log("ERROR", f"파일 이동 실패: {file_path} -> {target}: {exc}")
+        for index, source in enumerate(files, start=1):
+            suffix = source.suffix.lower()
+            name = base_name if index == 1 else f"{base_name}_{index}"
+            target = destination / f"{name}{suffix}"
+            target = self._resolve_conflict(target)
+            try:
+                shutil.move(str(source), str(target))
+                moved.append(target)
+                self.log("SUCCESS", f"{category} 파일 이동: {source.name} -> {target}")
+            except Exception as exc:
+                self.log("ERROR", f"{category} 파일 이동 실패: {source} -> {target}: {exc}")
         return moved
 
-    def _build_unique_name(self, file_path: Path) -> str:
-        digest = self._hash_file(file_path)
-        timestamp = datetime.now().strftime("%H%M%S")
-        return f"{file_path.stem}_{timestamp}_{digest[:8]}{file_path.suffix.lower()}"
+    def _resolve_conflict(self, path: Path) -> Path:
+        if not path.exists():
+            return path
+        stem = path.stem
+        suffix = path.suffix
+        counter = 2
+        while True:
+            candidate = path.with_name(f"{stem}_{counter}{suffix}")
+            if not candidate.exists():
+                return candidate
+            counter += 1
 
-    def _hash_file(self, file_path: Path) -> str:
-        cache_key = str(file_path.resolve())
-        if cache_key in self.hash_cache:
-            return self.hash_cache[cache_key]
-        hasher = hashlib.sha256()
-        with file_path.open('rb') as handle:
-            for chunk in iter(lambda: handle.read(8192), b''):
-                hasher.update(chunk)
-        digest = hasher.hexdigest()
-        self.hash_cache[cache_key] = digest
-        return digest
+    def _convert_excel_to_txt(self, source: Path, target: Path) -> bool:
+        try:
+            df = pd.read_excel(source)
+        except Exception as exc:
+            self.log("ERROR", f"엑셀 로드 실패: {source.name}: {exc}")
+            return False
+        try:
+            df = df.fillna("")
+            df.to_csv(target, sep='	', index=False, encoding='utf-8-sig')
+            self.log("SUCCESS", f"TXT 변환 완료: {target.name}")
+            return True
+        except Exception as exc:
+            self.log("ERROR", f"TXT 저장 실패: {target.name}: {exc}")
+            return False
+
+    def _collection_root(self) -> Path:
+        root = self.c.get("paths", {}).get("collection_root")
+        if not root:
+            root = r"E:/업무/03_데이터_수집"
+        return Path(root)
+
+    def _build_base_filename(self, product_id: int, product_name: str, store_name: str) -> str:
+        product_part = self._sanitize_component(product_name, default="제품")
+        store_part = self._sanitize_component(store_name, default="스토어")
+        return f"{product_id:03d} - {product_part} _ {store_part}"
+
+    def _sanitize_component(self, text: str, *, default: str) -> str:
+        if not text:
+            return default
+        cleaned = []
+        for ch in str(text):
+            if ch in self._INVALID_CHARS or ord(ch) < 32:
+                cleaned.append(' ')
+            else:
+                cleaned.append(ch)
+        normalized = ' '.join(''.join(cleaned).replace('\r', ' ').replace('\n', ' ').split())
+        normalized = normalized.strip().strip('.')
+        return normalized or default
+
+    def _normalize_date(self, value: Optional[str]) -> str:
+        if isinstance(value, datetime):
+            return value.strftime("%Y%m%d")
+        if isinstance(value, str):
+            for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d", "%Y.%m.%d"):
+                try:
+                    dt = datetime.strptime(value, fmt)
+                    return dt.strftime("%Y%m%d")
+                except ValueError:
+                    continue
+        return datetime.now().strftime("%Y%m%d")
+
+    def _normalize_date_for_db(self, value: str) -> str:
+        if isinstance(value, datetime):
+            return value.strftime("%Y-%m-%d")
+        if isinstance(value, str):
+            for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d", "%Y.%m.%d"):
+                try:
+                    dt = datetime.strptime(value, fmt)
+                    return dt.strftime("%Y-%m-%d")
+                except ValueError:
+                    continue
+        return datetime.now().strftime("%Y-%m-%d")
+
+    def _determine_store_name(self, metadata: Dict[str, Any]) -> str:
+        for key in ("store_name", "store", "seller", "seller_name", "mall_name", "vendor"):
+            value = metadata.get(key)
+            if value:
+                return str(value)
+        return "UnknownStore"
 
     def _build_db_row(
         self,
@@ -271,6 +363,7 @@ class DataProcessor:
         assets: Dict[str, Any],
         metadata: Dict[str, Any],
         collected_at: str,
+        store_name: str,
     ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "product_id": product_id,
@@ -287,10 +380,44 @@ class DataProcessor:
         extras = {
             "image_paths": assets.get("images", []),
             "review_files": assets.get("reviews", []),
+            "review_excels": assets.get("review_excels", []),
+            "review_texts": assets.get("review_texts", []),
+            "store_name": store_name,
             "source_metadata": metadata,
         }
         payload.update(extras)
         return payload
+
+    def save_cold_email(self, payload: Dict[str, Any], email_content: str) -> Optional[str]:
+        """생성된 콜드메일을 적절한 폴더에 저장"""
+        try:
+            product_id = payload.get("product_id", 1)
+            product_name = payload.get("product_name", "Unknown")
+            store_name = payload.get("store_name", "UnknownStore")
+            collected_at = payload.get("collected_at") or datetime.now().strftime("%Y-%m-%d")
+
+            # 날짜 폴더와 스토어 폴더 구조 사용
+            date_folder = self._normalize_date(collected_at)
+            store_dir = self._sanitize_component(store_name, default="UnknownStore")
+            base_dir = self._collection_root() / date_folder / store_dir
+            base_dir.mkdir(parents=True, exist_ok=True)
+
+            # 파일명 생성 (기존 패턴과 일치)
+            base_filename = self._build_base_filename(product_id, product_name, store_name)
+            email_file = base_dir / f"{base_filename}_cold_email.txt"
+
+            # 중복 파일명 처리
+            email_file = self._resolve_conflict(email_file)
+
+            # 콜드메일 저장
+            email_file.write_text(email_content, encoding="utf-8")
+
+            self.log("SUCCESS", f"콜드메일 저장 완료: {email_file}")
+            return str(email_file)
+
+        except Exception as exc:
+            self.log("ERROR", f"콜드메일 저장 실패: {exc}")
+            return None
 
     def update_db_sample(self, idx: int, product_name: str) -> bool:
         row = self._build_db_row(

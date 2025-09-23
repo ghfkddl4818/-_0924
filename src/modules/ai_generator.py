@@ -20,6 +20,8 @@ class AIGenerator:
         self._model: GenerativeModel | None = None
         self._generation_config: GenerationConfig | None = None
         self._generation_kwargs: Dict[str, Any] = {}
+        self._api_call_count = 0
+        self._max_api_calls = self.c.get("ai", {}).get("generation", {}).get("max_api_calls", 50)
         self._configure_tesseract()
         self._setup_llm()
         self.template = Path(self.c["ai"]["prompt"]["template_file"]).read_text(encoding="utf-8")
@@ -118,9 +120,9 @@ class AIGenerator:
     def extract_text_tesseract(self, image_path: str) -> str:
         cfg = self.c["ocr"]["tesseract"]["config"]
         try:
-            img = Image.open(image_path)
-            text = pytesseract.image_to_string(img, config=cfg)
-            return text.strip()
+            with Image.open(image_path) as img:  # 메모리 누수 방지를 위한 context manager 사용
+                text = pytesseract.image_to_string(img, config=cfg)
+                return text.strip()
         except Exception as e:  # pragma: no cover - hardware dependency
             self.log("ERROR", f"OCR 처리 실패: {e}")
             return ""
@@ -156,8 +158,15 @@ class AIGenerator:
         return "".join(chunks)
 
     def call_llm(self, prompt: str) -> str:
+        if self._api_call_count >= self._max_api_calls:
+            raise RuntimeError(f"API 호출 한도 초과: {self._api_call_count}/{self._max_api_calls}")
+
         if not self._model or not self._generation_config:
             raise RuntimeError("Vertex AI 모델이 초기화되지 않았습니다.")
+
+        self._api_call_count += 1
+        self.log("INFO", f"API 호출 {self._api_call_count}/{self._max_api_calls}")
+
         try:
             response = self._model.generate_content(
                 prompt,
@@ -196,3 +205,56 @@ class AIGenerator:
 
     def generate_batch(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return [self.generate_single_email(p) for p in products]
+
+    def generate_cold_email_from_assets(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """OCR 텍스트와 리뷰 데이터를 기반으로 콜드메일 생성"""
+        try:
+            # OCR 텍스트 추출 (이미지 파일들에서)
+            ocr_texts = []
+            image_paths = payload.get("image_paths", [])
+            for img_path in image_paths:
+                if Path(img_path).exists():
+                    ocr_text = self.extract_text_tesseract(img_path)
+                    if ocr_text:
+                        ocr_texts.append(ocr_text)
+
+            # 리뷰 텍스트 로드
+            review_texts = []
+            review_files = payload.get("review_texts", [])
+            for review_file in review_files:
+                if Path(review_file).exists():
+                    try:
+                        review_content = Path(review_file).read_text(encoding="utf-8")
+                        review_texts.append(review_content)
+                    except Exception as exc:
+                        self.log("WARNING", f"리뷰 파일 읽기 실패: {review_file}: {exc}")
+
+            # 콜드메일 생성용 데이터 구성
+            combined_ocr = "\n\n".join(ocr_texts) if ocr_texts else ""
+            combined_reviews = "\n\n".join(review_texts) if review_texts else ""
+
+            # features에 OCR 텍스트와 리뷰 요약 포함
+            features = f"OCR 추출 정보:\n{combined_ocr}"
+            if combined_reviews:
+                features += f"\n\n리뷰 데이터:\n{combined_reviews[:1000]}..."  # 길이 제한
+
+            email_payload = {
+                "product_name": payload.get("product_name", ""),
+                "brand": payload.get("brand", ""),
+                "features": features,
+                "review_summary": combined_reviews[:500] if combined_reviews else "",  # 요약용
+            }
+
+            # 콜드메일 생성
+            result = self.generate_single_email(email_payload)
+
+            if result.get("ok"):
+                self.log("SUCCESS", f"콜드메일 생성 완료: product_id={payload.get('product_id')}")
+            else:
+                self.log("ERROR", f"콜드메일 생성 실패: {result.get('error', 'Unknown error')}")
+
+            return result
+
+        except Exception as exc:
+            self.log("ERROR", f"콜드메일 생성 중 오류: {exc}")
+            return {"ok": False, "error": str(exc)}

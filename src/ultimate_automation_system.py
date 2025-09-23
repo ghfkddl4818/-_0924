@@ -11,6 +11,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, NoReturn, Optional
+from threading import Lock
 
 import yaml
 
@@ -28,6 +29,11 @@ except ModuleNotFoundError as exc:  # pragma: no cover - platform-specific guard
 
     _missing_tkinter()
 
+
+import sys
+from pathlib import Path
+# Add parent directory to path to find modules
+sys.path.insert(0, str(Path(__file__).parent))
 
 from modules.utils import resolve_paths, replace_env_vars, ensure_dirs
 from modules.logger import setup_logging, GuiLogHandler
@@ -65,6 +71,7 @@ class UltimateAutomationSystem:
 
         self.product_payloads: List[Dict[str, Any]] = []
         self.latest_payload: Optional[Dict[str, Any]] = None
+        self._payload_lock = Lock()  # 동시성 문제 해결을 위한 락
 
         # GUI
         self.root = tk.Tk()
@@ -431,11 +438,33 @@ class UltimateAutomationSystem:
         self.state["running"] = False
 
     def _on_product_payload(self, payload: Dict[str, Any]) -> None:
-        self.latest_payload = payload
-        self.product_payloads.append(payload)
+        with self._payload_lock:  # 스레드 안전성 보장
+            self.latest_payload = payload
+            self.product_payloads.append(payload)
+
         product_id = payload.get("product_id")
         product_name = payload.get("product_name", "")
         self.log("INFO", f"Cold-email payload ready (product_id={product_id}, name='{product_name}')")
+
+        # 콜드메일 자동 생성 및 저장 (별도 스레드에서 실행하여 블로킹 방지)
+        def generate_email():
+            try:
+                email_result = self.ai_generator.generate_cold_email_from_assets(payload)
+                if email_result.get("ok"):
+                    email_content = email_result.get("raw", "")
+                    saved_path = self.data_processor.save_cold_email(payload, email_content)
+                    if saved_path:
+                        self.log("SUCCESS", f"콜드메일 자동 생성 및 저장 완료: {saved_path}")
+                    else:
+                        self.log("ERROR", "콜드메일 저장 실패")
+                else:
+                    error_msg = email_result.get("error", "Unknown error")
+                    self.log("ERROR", f"콜드메일 생성 실패: {error_msg}")
+            except Exception as exc:
+                self.log("ERROR", f"콜드메일 자동 생성 중 오류: {exc}")
+
+        # 백그라운드에서 실행하여 메인 루프 블로킹 방지
+        threading.Thread(target=generate_email, daemon=True).start()
 
     def _build_product_context(self, idx: int) -> Dict[str, Any]:
         context: Dict[str, Any] = {

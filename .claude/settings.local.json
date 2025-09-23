@@ -11,7 +11,12 @@
       "Bash(git branch:*)",
       "Bash(git remote remove:*)",
       "Bash(git push:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(python -m py_compile:*)",
+      "Bash(sed:*)",
+      "Bash(python:*)",
+      "Bash(git restore:*)",
+      "Bash(git lfs:*)"
     ],
     "deny": [],
     "ask": []

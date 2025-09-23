@@ -4,3 +4,38 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
+
+# Sensitive files
+jadong-471919-29a5670ace12.json
+*.json
+!package.json
+!config.json.example
+
+# Local settings
+.claude/settings.local.json
+
+# Logs
+logs/
+*.log
+
+# Runtime directories
+runs/
+downloads/
+data/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+3.txt
+
+# Korean filenames (temporary)
+ocr*
+상세페이지*
+*.md
+!README.md
+!CLAUDE.md
+
+# Scripts
+*.bat
+update_web_automation.py
