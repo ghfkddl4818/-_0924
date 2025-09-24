@@ -1,5 +1,5 @@
 
-import time, os
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 import pyautogui
@@ -7,6 +7,8 @@ import pyautogui
 from .image_matcher import EnhancedImageMatcher
 from .error_handler import ErrorHandler
 from .data_processor import DataProcessor
+from .download_verifier import DownloadVerifier
+from .bugpack import collect_bugpack
 
 class WebAutomation:
     def __init__(
@@ -29,6 +31,40 @@ class WebAutomation:
         self._last_payload: Optional[Dict[str, Any]] = None
         self._startup_delay_done = False
         self._detail_stabilized = False
+
+    def _repeat_until(
+        self,
+        label: str,
+        action: Callable[[], bool],
+        timeout: float,
+        interval: float,
+        max_attempts: Optional[int] = None,
+        on_retry: Optional[Callable[[int], None]] = None,
+        failure_level: str = "ERROR",
+    ) -> bool:
+        start = time.time()
+        attempts = 0
+        while True:
+            if action():
+                return True
+            attempts += 1
+            timed_out = timeout > 0 and (time.time() - start) >= timeout
+            exhausted = max_attempts is not None and max_attempts > 0 and attempts >= max_attempts
+            if timed_out or exhausted:
+                reasons: List[str] = []
+                if timed_out:
+                    reasons.append(f"시간초과 {timeout:.1f}s")
+                if exhausted:
+                    reasons.append(f"시도 {attempts}회")
+                reason = ", ".join(reasons) if reasons else "조건 미충족"
+                self.log(failure_level, f"{label} 탐색 중단 ({reason})")
+                return False
+            if on_retry:
+                try:
+                    on_retry(attempts)
+                except Exception as exc:  # pragma: no cover - defensive guard
+                    self.log("WARNING", f"{label} 재시도 부수 작업 실패: {exc}")
+            time.sleep(max(0.0, interval))
 
     def reset_counts(self, total: int):
         self.total = total
@@ -133,24 +169,37 @@ class WebAutomation:
             settle_wait = float(buttons.get("initial_wait", wait_between))
             settle_attempts = max(1, int(buttons.get("initial_attempts", 2)))
             initial_timeout = float(buttons.get("initial_timeout", button_timeout))
-            for attempt_idx in range(settle_attempts):
-                if attempt_click(timeout=initial_timeout):
-                    self._detail_stabilized = True
-                    return True
-                if attempt_idx < settle_attempts - 1:
-                    time.sleep(settle_wait)
+            if self._repeat_until(
+                "상세 버튼 초기 안정화",
+                lambda: attempt_click(timeout=initial_timeout),
+                timeout=initial_timeout,
+                interval=settle_wait,
+                max_attempts=settle_attempts,
+                failure_level="INFO",
+            ):
+                self._detail_stabilized = True
+                return True
             self._detail_stabilized = True
 
-        if attempt_click():
-            return True
+        search_timeout = float(buttons.get("search_timeout", button_timeout))
+        search_interval = float(buttons.get("search_interval", wait_between))
+        max_scroll_attempts = max(0, int(scroll_amount > 0) * max_scrolls)
+        default_attempts = max_scroll_attempts + 1 if max_scroll_attempts else 0
+        search_attempts = int(buttons.get("search_attempts", default_attempts))
 
-        for idx in range(max_scrolls):
-            if scroll_amount <= 0:
-                break
-            self._scroll_down(scroll_amount, smooth_scroll)
-            time.sleep(wait_between)
-            if attempt_click():
-                return True
+        def on_retry(attempt_idx: int) -> None:
+            if scroll_amount > 0 and attempt_idx <= max_scroll_attempts:
+                self._scroll_down(scroll_amount, smooth_scroll)
+
+        if self._repeat_until(
+            "상세 버튼",
+            attempt_click,
+            timeout=search_timeout,
+            interval=search_interval,
+            max_attempts=search_attempts if search_attempts > 0 else None,
+            on_retry=on_retry if scroll_amount > 0 else None,
+        ):
+            return True
         self.log("ERROR", "상세 버튼 클릭 실패")
         return False
 
@@ -387,28 +436,22 @@ class WebAutomation:
     # ---- download verifier ----
     def _wait_download_completion(self, extensions: List[str]) -> bool:
         folder = Path(self.c["paths"]["download_folder"])
-        start_snapshot = {f.name for f in folder.glob("*")}
-        deadline = time.time() + self.c["web_automation"]["buttons"]["analysis"]["download_timeout"]
-        temp_exts = [".crdownload", ".part", ".tmp"]
-        while time.time() < deadline:
-            # temp 파일이 더 이상 없고, 새로운 최종 파일이 등장했는지
-            current = list(folder.glob("*"))
-            names = {f.name for f in current}
-            new_files = [f for f in current if f.name not in start_snapshot]
-            # temp가 남아있으면 계속 대기
-            if any(f.suffix.lower() in temp_exts for f in new_files):
-                time.sleep(0.5); continue
-            # 확정 파일 찾기
-            finals = [f for f in new_files if f.suffix.lower().lstrip(".") in extensions]
-            if finals:
-                # 파일 열기 가능한지 확인
-                try:
-                    with open(finals[0], "rb") as _:
-                        pass
-                    self.log("SUCCESS", f"다운로드 완료: {finals[0].name}")
-                    return True
-                except Exception as e:
-                    self.log("WARNING", f"파일 열기 대기: {e}")
-            time.sleep(0.5)
-        self.log("ERROR", "다운로드 타임아웃")
+        folder.mkdir(parents=True, exist_ok=True)
+        verifier_conf = (
+            self.c.get("web_automation", {})
+            .get("buttons", {})
+            .get("analysis", {})
+            .get("download_verifier", {})
+        )
+        verifier = DownloadVerifier(folder, verifier_conf, self.log)
+        result = verifier.wait_for_completion(extensions)
+        if result:
+            return True
+
+        if bool(verifier_conf.get("collect_bugpack_on_failure", True)):
+            reason = "download_verifier_failed"
+            if extensions:
+                ext_label = "_".join(sorted({ext.lower().lstrip('.') for ext in extensions}))
+                reason = f"{reason}_{ext_label}"
+            collect_bugpack(self.c, self.log, reason)
         return False
