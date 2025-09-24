@@ -19,10 +19,8 @@
 
 [INPUT FIELDS]
 - 제품명: {product_name}
-- 브랜드: {brand}
-- 특징: {features}
-- 리뷰 요약: {review_summary}
-- 언어: {language}
+- 핵심 특징: {unique_features}
+- 요청 행동: {call_to_action}
 
 [REQUIREMENTS]
 - JSON meta와 본문 사이에 빈 줄 1개
