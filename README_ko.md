@@ -16,6 +16,12 @@ Ultimate Automation System v3은 다중 에이전트 기반 자동화 파이프�
 - 환경 변수는 UAS_ 접두사와 __ 구분자를 사용합니다. 예: UAS_AI__TEMPERATURE=0.3.
 - API 키와 같은 비밀 값은 환경 변수나 시크립 매니저로 주입하고 저장소에 커밋하지 말아주세요.
 
+### 설정 계층 (default→local→env→UI)
+1. **default**: 저장소에 포함된 config/default.yaml이 기본값을 제공합니다.
+2. **local**: config/local.yaml(존재할 경우)이 default 값을 덮어씁니다. 예시는 config/local.yaml.example을 참고하세요.
+3. **env**: .env 또는 시스템 환경 변수(TESSERACT_CMD, VERTEX_CREDENTIALS, UAS_*)가 YAML 값을 재정의합니다.
+4. **UI**: 실행 중 GUI에서 변경한 값은 메모리에만 적용되며 종료 시 초기화됩니다.
+
 ## 5분 체험
 1. examples/sample_request_basic.json 파일을 열어 요청 페이로드를 준비하세요.
 2. 메인 엔트리 포인트 실행: python src/ultimate_automation_system.py --config config/local.yaml.
@@ -38,3 +44,8 @@ Ultimate Automation System v3은 다중 에이전트 기반 자동화 파이프�
 - **출력 인코딩 깔끔**: UTF-8을 지원하는 터미널인지 확인하고 logs/latest.log에서 디코딩 힌트를 확인하세요.
 - **환경 설정이 적용되지 않음**: 환경 변수 알파른과 config/local.yaml이 기본 프로필을 상속하는지 검토하세요.
 - **파이프라인 중단**: 실행 전 scripts/dev.ps1 -Task lint를 통해 검증 오류를 사전에 발견하세요.
+
+## OS별 주의사항
+- **Windows**: Tesseract 경로에 공백이 포함되면 따옴표로 감싸거나 환경 변수 TESSERACT_CMD에 전체 경로를 지정하세요.
+- **macOS**: `brew install tesseract`로 설치한 후 `/opt/homebrew/bin`이 PATH에 포함되었는지 확인하고 필요 시 .env에 TESSERACT_CMD를 명시하세요.
+- **Linux**: 패키지 관리자(`apt install tesseract-ocr` 등)로 설치 후 서비스 계정 키 파일 권한을 `chmod 600`으로 제한해 누출을 방지하세요.

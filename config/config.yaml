@@ -1,5 +1,5 @@
 system:
-  version: 2.0.0
+  version: 3.0.0
   encoding: utf-8
   debug_mode: false
   test_mode: false
@@ -163,7 +163,7 @@ ocr:
     threshold: 128
     dpi: 300
   tesseract:
-    command: E:/tesseract/tesseract.exe
+    command: ${TESSERACT_CMD}
     psm: 3
     oem: 3
     config: --oem 3 --psm 3 -l kor+eng
@@ -176,7 +176,7 @@ ai:
   vertex:
     project_id: jadong-471919
     location: us-central1
-    credentials_path: E:/VSC/EVEREiThing/ultimate_automation_system_v3/ultimate_automation_system_v3/jadong-471919-29a5670ace12.json
+    credentials_path: ${VERTEX_CREDENTIALS}
     model:
       name: gemini-2.5-pro
       temperature: 0.3
@@ -205,7 +205,7 @@ ai:
     must_include: []
 gui:
   window:
-    title: Ultimate Automation System v2.0
+    title: Ultimate Automation System v3.0.0
     size: 1400x800
     min_size: 1200x600
     resizable: true
