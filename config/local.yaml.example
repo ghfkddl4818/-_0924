@@ -1,7 +1,14 @@
-# config/default.yaml에서 필요한 값만 복사해 덮어쓰세요.
+# config/default.yaml에서 필요한 키만 복사해 덮어쓰는 예시입니다.
+# 존재하지 않는 키를 추가하면 로딩 시 무시됩니다.
+system:
+  version: 3.0.0  # GUI 타이틀과 동일하게 표시됩니다.
+
+ai:
+  prompt:
+    template_file: assets/templates/cold_email_prompt.txt  # 사용자 정의 프롬프트 경로
+  vertex:
+    credentials_path: ${VERTEX_CREDENTIALS}  # 또는 GOOGLE_APPLICATION_CREDENTIALS 환경 변수를 사용하세요.
+
 ocr:
   tesseract:
-    command: ${TESSERACT_CMD}  # Tesseract 실행 파일 경로 (환경 변수로 주입)
-ai:
-  vertex:
-    credentials_path: ${VERTEX_CREDENTIALS}  # Vertex AI 서비스 계정 JSON 키 경로
+    command: ${TESSERACT_CMD}  # Tesseract 실행 파일 전체 경로

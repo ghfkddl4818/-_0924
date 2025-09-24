@@ -12,14 +12,15 @@ Ultimate Automation System v3은 다중 에이전트 기반 자동화 파이프�
 4. 기여자 작업을 준비하려면 scripts/dev.ps1 -Task bootstrap을 실행하세요.
 
 ### 구성 기본
-- 기본 설정은 config/default.yaml에 있으며, 사용자 정의가 필요하면 config/local.yaml로 복사하세요.
+- 기본 설정은 config/default.yaml에 있으며, 필요한 키만 선택해 config/local.yaml에 덮어쓰세요.
+- config/local.yaml.example과 .env.example을 복사하면 로컬 오버라이드를 빠르게 작성할 수 있습니다.
 - 환경 변수는 UAS_ 접두사와 __ 구분자를 사용합니다. 예: UAS_AI__TEMPERATURE=0.3.
-- API 키와 같은 비밀 값은 환경 변수나 시크립 매니저로 주입하고 저장소에 커밋하지 말아주세요.
+- API 키와 같은 비밀 값은 환경 변수나 시크릿 매니저로 주입하고 저장소에 커밋하지 말아주세요.
 
 ### 설정 계층 (default→local→env→UI)
 1. **default**: 저장소에 포함된 config/default.yaml이 기본값을 제공합니다.
 2. **local**: config/local.yaml(존재할 경우)이 default 값을 덮어씁니다. 예시는 config/local.yaml.example을 참고하세요.
-3. **env**: .env 또는 시스템 환경 변수(TESSERACT_CMD, VERTEX_CREDENTIALS, UAS_*)가 YAML 값을 재정의합니다.
+3. **env**: .env 또는 시스템 환경 변수(TESSERACT_CMD, GOOGLE_APPLICATION_CREDENTIALS, VERTEX_CREDENTIALS, UAS_*)가 YAML 값을 재정의합니다.
 4. **UI**: 실행 중 GUI에서 변경한 값은 메모리에만 적용되며 종료 시 초기화됩니다.
 
 ## 5분 체험
@@ -38,14 +39,14 @@ Ultimate Automation System v3은 다중 에이전트 기반 자동화 파이프�
 
 각 단계는 YAML 설정과 CLI 플래그로 제어할 수 있으며, 시나리오에 따라 개별 에이전트를 켜거나 끄어 사용할 수 있습니다.
 
-## 트러블슈틱게이팅
+## 트러블슈팅
 - **의존성 설치 실패**: python -m pip install --upgrade pip으로 pip를 업그레이드한 뒤 다시 시도하세요.
-- **모델 연결 실패**: API 자ca9 증명과 네트워크 연결을 확인하고 --verbose 옵션으로 재실행하여 상세 로그를 확보하세요.
-- **출력 인코딩 깔끔**: UTF-8을 지원하는 터미널인지 확인하고 logs/latest.log에서 디코딩 힌트를 확인하세요.
-- **환경 설정이 적용되지 않음**: 환경 변수 알파른과 config/local.yaml이 기본 프로필을 상속하는지 검토하세요.
+- **모델 연결 실패**: API 자격 증명과 네트워크 연결을 확인하고 --verbose 옵션으로 재실행하여 상세 로그를 확보하세요.
+- **출력 인코딩 문제**: UTF-8을 지원하는 터미널인지 확인하고 logs/latest.log에서 디코딩 힌트를 확인하세요.
+- **환경 설정이 적용되지 않음**: .env 파일이 로드되었는지, config/local.yaml이 기본 프로필을 상속하는지 검토하세요.
 - **파이프라인 중단**: 실행 전 scripts/dev.ps1 -Task lint를 통해 검증 오류를 사전에 발견하세요.
 
 ## OS별 주의사항
-- **Windows**: Tesseract 경로에 공백이 포함되면 따옴표로 감싸거나 환경 변수 TESSERACT_CMD에 전체 경로를 지정하세요.
-- **macOS**: `brew install tesseract`로 설치한 후 `/opt/homebrew/bin`이 PATH에 포함되었는지 확인하고 필요 시 .env에 TESSERACT_CMD를 명시하세요.
-- **Linux**: 패키지 관리자(`apt install tesseract-ocr` 등)로 설치 후 서비스 계정 키 파일 권한을 `chmod 600`으로 제한해 누출을 방지하세요.
+- **Windows**: Tesseract 경로에 공백이 포함되면 환경 변수 TESSERACT_CMD에 전체 경로를 입력하고 따옴표는 제거하세요. GOOGLE_APPLICATION_CREDENTIALS에는 `C:/Users/you/service-account.json`처럼 정규화된 경로를 사용하세요.
+- **macOS**: `brew install tesseract`로 설치한 후 `/opt/homebrew/bin`이 PATH에 포함되었는지 확인하고 필요 시 .env에 TESSERACT_CMD와 GOOGLE_APPLICATION_CREDENTIALS를 명시하세요.
+- **Linux**: 패키지 관리자(`apt install tesseract-ocr` 등)로 설치 후 서비스 계정 키 파일 권한을 `chmod 600`으로 제한해 누출을 방지하세요. systemd 서비스에 등록하는 경우 EnvironmentFile 옵션으로 .env를 로드하세요.
