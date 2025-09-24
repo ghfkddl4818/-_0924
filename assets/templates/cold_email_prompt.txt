@@ -19,11 +19,12 @@
 
 [INPUT FIELDS]
 - 제품명: {product_name}
-- 핵심 특징: {unique_features}
+- 핵심 특징(여러 줄 불릿 허용): {unique_features}
 - 요청 행동: {call_to_action}
 
 [REQUIREMENTS]
 - JSON meta와 본문 사이에 빈 줄 1개
+- JSON meta에는 product_name, unique_features, call_to_action 3개 키만 포함
 - 본문에 "제품명"을 1회 자연스럽게 노출
 - CTA는 일정/연락/견적 제안 중 하나를 구체적으로
 

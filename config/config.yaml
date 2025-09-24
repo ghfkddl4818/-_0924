@@ -206,7 +206,7 @@ ai:
     batch_size: 5
     max_api_calls: 30
   prompt:
-    template_file: 상세페이지 기획안 작성 프롬프트 (자연어 버전).md
+    template_file: assets/templates/cold_email_prompt.txt
     tone: professional
     language: korean
     max_length: 500
