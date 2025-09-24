@@ -1,7 +1,7 @@
 tasks:
 - id: MCP-01
   title: Healthcheck & 2-stage progress UI
-  status: todo
+  status: in-progress  # UI 상태 색상과 단계별 진행률 바인딩 검증 필요
   touchpoints:
   - src/ultimate_automation_system.py
   accept:
@@ -10,7 +10,7 @@ tasks:
   - 실패 시 ZIP(스크린샷, logs, config, checkpoint) 자동 저장
 - id: MCP-02
   title: Download completion verifier
-  status: todo
+  status: done
   touchpoints:
   - src/modules/web_automation.py
   accept:
@@ -18,7 +18,7 @@ tasks:
   - sleep 제거, timeout은 상한
 - id: MCP-03
   title: 'Organizer: jpg/jpeg/png & single download folder'
-  status: todo
+  status: in-progress  # jpg/jpeg/png 이동 규칙과 단일 다운로드 폴더 정리 동작 확인 필요
   touchpoints:
   - src/modules/data_processor.py
   - config/config.yaml
@@ -27,7 +27,7 @@ tasks:
   - paths.download_folder만 스캔해 날짜 폴더로 이동
 - id: MCP-04
   title: Checkpoint each item
-  status: todo
+  status: in-progress  # checkpoint_interval=1 재시작 이어받기 시나리오 검증 중
   touchpoints:
   - src/modules/web_automation.py
   - config/config.yaml
@@ -35,7 +35,7 @@ tasks:
   - checkpoint_interval=1로 동작, 재실행 시 이어가기
 - id: MCP-05
   title: LLM output = JSON meta + body & validator
-  status: todo
+  status: done
   touchpoints:
   - src/modules/ai_generator.py
   - assets/templates/cold_email_prompt.txt

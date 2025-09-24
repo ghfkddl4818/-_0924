@@ -6,7 +6,7 @@
 4. FireShot 캡처 시작: ctrl+shift+s 단축키를 보내고 pre_wait(기본 1초)만큼 대기합니다. 이어서 save_button 이미지를 찾고 클릭합니다.
 5. FireShot 진행 감시: progress_template, completion_template, save_button 상태를 `_wait_fireshot_completion`이 반복 검사합니다. 진행 배너가 사라지고 완료 템플릿이 나타나거나 저장 버튼이 없어지면 완료로 판단하고 post_wait_interval 주기로 확인합니다(최대 post_wait_timeout). 완료되면 wait_after(기본 3초)만큼 추가 대기합니다.
 6. 분석/다운로드 시퀀스: analysis_start → excel_download 이미지를 지정된 retry, timeout, wait_after 값으로 반복 클릭합니다.
-7. 다운로드 감시: `_wait_download_completion`이 download_folder를 주기적으로 확인하여 새 파일이 완성되었는지(임시 확장자 제거) 검사합니다. download_timeout(기본 45초)을 넘기면 실패 처리합니다.
+7. 다운로드 감시: `_wait_download_completion`이 download_folder를 주기적으로 확인하여 새 파일이 완성되었는지(임시 확장자 제거 + 파일 핸들 열림 + 일정 간격으로 연속 두 번 이상 동일한 파일 크기 유지) 검증합니다. download_timeout(기본 45초)을 넘기면 bugpack ZIP(최신 로그, 마지막 스크린샷, 현재 설정 스냅샷)을 자동 수집하고 실패 처리합니다.
 8. 탭 정리: close_after_process=true이면 ctrl+w로 탭을 닫고 tab_switch_delay 만큼 대기합니다. 그렇지 않으면 ctrl+tab으로 다음 탭으로 이동합니다.
 9. 다음 상품이 있으면 2~8단계를 반복합니다.
 10. GUI의 파이프라인 탭을 이용하면 parse/normalize/compose 단계를 개별 혹은 구간으로 실행해 JSON 결과를 확인할 수 있습니다.
