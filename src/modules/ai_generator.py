@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -27,10 +28,12 @@ class AIGenerator:
         self.template = Path(self.c["ai"]["prompt"]["template_file"]).read_text(encoding="utf-8")
 
     def _configure_tesseract(self) -> None:
+        env_cmd = os.environ.get("TESSERACT_CMD")
         try:
             cmd = self.c.get("ocr", {}).get("tesseract", {}).get("command")
         except AttributeError:
             cmd = None
+        cmd = env_cmd or cmd
         if not cmd:
             return
         path = Path(cmd).expanduser()
@@ -64,7 +67,8 @@ class AIGenerator:
             raise ValueError(f"Vertex AI 설정값이 누락되었습니다: {', '.join(missing)}")
 
         credentials = None
-        credentials_path = vertex_conf.get("credentials_path")
+        env_credentials = os.environ.get("VERTEX_CREDENTIALS")
+        credentials_path = env_credentials or vertex_conf.get("credentials_path")
         if credentials_path:
             cred_path = Path(credentials_path).expanduser()
             if cred_path.exists():

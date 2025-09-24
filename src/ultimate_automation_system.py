@@ -144,7 +144,12 @@ class UltimateAutomationSystem:
         self.model_name_var = tk.StringVar(value=self.config.get("ai", {}).get("vertex", {}).get("model", {}).get("name", ""))
         ttk.Entry(self.set_tab, textvariable=self.model_name_var, width=60).grid(row=3, column=1, sticky="w", padx=6, pady=6)
         ttk.Label(self.set_tab, text="Credentials path:").grid(row=4, column=0, sticky="e", padx=6, pady=6)
-        self.credentials_path_var = tk.StringVar(value=self.config.get("ai", {}).get("vertex", {}).get("credentials_path", ""))
+        default_credentials_path = (
+            os.environ.get("VERTEX_CREDENTIALS")
+            or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+            or self.config.get("ai", {}).get("vertex", {}).get("credentials_path", "")
+        )
+        self.credentials_path_var = tk.StringVar(value=default_credentials_path)
         ttk.Entry(self.set_tab, textvariable=self.credentials_path_var, width=60).grid(row=4, column=1, sticky="w", padx=6, pady=6)
         ttk.Button(self.set_tab, text="적용", command=self.apply_settings).grid(row=4, column=2, padx=6, pady=6)
 
@@ -338,7 +343,7 @@ class UltimateAutomationSystem:
         location = self.location_var.get().strip()
         model_name = self.model_name_var.get().strip()
         credentials_input = self.credentials_path_var.get().strip()
-        credential_env = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        credential_env = os.environ.get("VERTEX_CREDENTIALS") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
         if prov != "vertex":
             issues.append("현재 빌드는 Vertex AI Gemini만 지원합니다.")
         if not project:
@@ -352,7 +357,7 @@ class UltimateAutomationSystem:
             if not cred_path.exists():
                 issues.append(f"서비스 계정 키 파일을 찾을 수 없습니다: {cred_path}")
         elif not credential_env:
-            issues.append("서비스 계정 키 경로를 입력하거나 GOOGLE_APPLICATION_CREDENTIALS 환경변수를 설정해주세요.")
+            issues.append("서비스 계정 키 경로를 입력하거나 VERTEX_CREDENTIALS/GOOGLE_APPLICATION_CREDENTIALS 환경변수를 설정해주세요.")
         if missing:
             issues.append(f"템플릿 이미지 없음: {missing}")
         color = "초록(정상)" if not issues else "빨강(문제)"

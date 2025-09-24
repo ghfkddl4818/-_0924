@@ -1,0 +1,7 @@
+# config/default.yaml에서 필요한 값만 복사해 덮어쓰세요.
+ocr:
+  tesseract:
+    command: ${TESSERACT_CMD}  # Tesseract 실행 파일 경로 (환경 변수로 주입)
+ai:
+  vertex:
+    credentials_path: ${VERTEX_CREDENTIALS}  # Vertex AI 서비스 계정 JSON 키 경로
