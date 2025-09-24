@@ -10,7 +10,9 @@ from src.modules.ai_generator import AIGenerator
 @pytest.fixture
 def vertex_config(tmp_path: Path):
     template = tmp_path / "template.md"
-    template.write_text("{product_name}", encoding="utf-8")
+    template.write_text(
+        "{product_name}\n{unique_features}\n{call_to_action}", encoding="utf-8"
+    )
     return {
         "ai": {
             "provider": "vertex",

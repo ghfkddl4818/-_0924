@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 import pytesseract
 from PIL import Image
@@ -11,6 +11,9 @@ from PIL import Image
 import vertexai
 from google.oauth2 import service_account
 from vertexai.preview.generative_models import GenerationConfig, GenerativeModel
+from pydantic import ValidationError
+
+from .email_schema import ColdEmailMeta, REQUIRED_EMAIL_META_KEYS
 
 
 class AIGenerator:
@@ -127,14 +130,31 @@ class AIGenerator:
             self.log("ERROR", f"OCR 처리 실패: {e}")
             return ""
 
+    def _format_unique_features(self, value: Any) -> str:
+        items: Iterable[str]
+        if isinstance(value, str):
+            items = [value]
+        elif isinstance(value, Iterable):
+            items = [str(v) for v in value]
+        else:
+            items = [str(value)]
+
+        cleaned = [item.strip() for item in items if str(item).strip()]
+        if not cleaned:
+            return ""
+        return "\n".join(f"- {item}" for item in cleaned)
+
     def create_prompt(self, product: Dict[str, Any]) -> str:
-        return self.template.format(
+        unique_features = self._format_unique_features(product.get("unique_features", []))
+        prompt = self.template.format(
             product_name=product.get("product_name", ""),
-            brand=product.get("brand", ""),
-            features=product.get("features", ""),
-            review_summary=product.get("review_summary", ""),
-            language=self.c["ai"]["prompt"]["language"],
+            unique_features=unique_features,
+            call_to_action=product.get("call_to_action", ""),
         )
+        language = self.c.get("ai", {}).get("prompt", {}).get("language")
+        if language:
+            prompt += f"\n\n[LANGUAGE]\n- 출력 언어: {language}"
+        return prompt
 
     def _extract_text(self, response: Any) -> str:
         text = getattr(response, "text", None)
@@ -157,6 +177,98 @@ class AIGenerator:
                 chunks.append(value)
         return "".join(chunks)
 
+    def _parse_json_meta(self, content: str) -> tuple[Dict[str, Any], str]:
+        start = content.find("{")
+        if start == -1:
+            raise ValueError("응답에서 JSON 메타 정보를 찾지 못했습니다.")
+        decoder = json.JSONDecoder()
+        try:
+            parsed, consumed = decoder.raw_decode(content[start:])
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
+            raise ValueError(f"JSON 메타 구문 오류: {exc.msg}") from exc
+        end = start + consumed
+        body = content[end:].lstrip("\n")
+        if not isinstance(parsed, dict):
+            raise ValueError("JSON 메타 구조가 객체 형태가 아닙니다.")
+        return parsed, body
+
+    def _format_validation_error(
+        self, error: Exception | str, missing_keys: Iterable[str] | None = None
+    ) -> str:
+        missing = sorted({str(key) for key in (missing_keys or []) if str(key)})
+        if isinstance(error, ValidationError):
+            missing.extend(
+                {
+                    str(err["loc"][0])
+                    for err in error.errors()
+                    if err.get("type") == "missing"
+                }
+            )
+            detail = "; ".join(err.get("msg", "") for err in error.errors())
+        else:
+            detail = str(error)
+        missing = sorted(set(missing))
+        guidance = "생성된 응답이 필수 메타 키와 일치하지 않습니다."
+        if missing:
+            guidance += f" 누락된 키: {', '.join(missing)}."
+        guidance += (
+            " JSON 메타가 "
+            + ", ".join(REQUIRED_EMAIL_META_KEYS)
+            + " 값을 모두 포함하도록 입력 데이터를 확인하거나 프롬프트를 조정한 뒤 다시 시도해주세요."
+        )
+        if detail:
+            guidance += f" (세부: {detail})"
+        return guidance
+
+    def _request_missing_keys(
+        self,
+        product: Dict[str, Any],
+        missing_keys: Iterable[str],
+        partial_meta: Dict[str, Any],
+        body: str,
+    ) -> Dict[str, Any]:
+        missing_list = sorted({str(key) for key in missing_keys if str(key)})
+        if not missing_list:
+            return {}
+        self.log("INFO", f"누락된 키 보정 시도: {', '.join(missing_list)}")
+        features_for_prompt = self._format_unique_features(product.get("unique_features", []))
+        known_values = [
+            f"- {key}: {json.dumps(partial_meta.get(key), ensure_ascii=False)}"
+            for key in REQUIRED_EMAIL_META_KEYS
+            if partial_meta.get(key)
+        ]
+        sections = [
+            "이전 이메일 생성 결과에서 필수 JSON 키가 누락되었습니다.",
+            f"누락된 키: {', '.join(missing_list)}",
+            "초기 입력 요약:",
+            f"- 제품명: {product.get('product_name', '')}",
+            f"- 핵심 특징:\n{features_for_prompt}",
+            f"- 원하는 행동: {product.get('call_to_action', '')}",
+        ]
+        if known_values:
+            sections.append("현재 확보된 값:")
+            sections.extend(known_values)
+        if body:
+            sections.append("이전 본문:")
+            sections.append(body)
+        sections.append("누락된 키만 포함하는 JSON 객체를 한 줄로 출력하세요.")
+        repair_prompt = "\n".join(sections)
+        try:
+            response = self.call_llm(repair_prompt)
+        except Exception:  # pragma: no cover - network dependency
+            return {}
+        try:
+            repaired_meta, _ = self._parse_json_meta(response)
+        except ValueError as exc:
+            self.log("WARNING", f"보정 응답 파싱 실패: {exc}")
+            return {}
+        fixes = {key: repaired_meta.get(key) for key in missing_list if repaired_meta.get(key)}
+        if fixes:
+            self.log("INFO", f"보정 키 확보: {', '.join(fixes.keys())}")
+        else:
+            self.log("WARNING", "보정 응답에 필요한 키가 포함되지 않았습니다.")
+        return fixes
+
     def call_llm(self, prompt: str) -> str:
         if self._api_call_count >= self._max_api_calls:
             raise RuntimeError(f"API 호출 한도 초과: {self._api_call_count}/{self._max_api_calls}")
@@ -177,31 +289,82 @@ class AIGenerator:
             raise
         return self._extract_text(response)
 
-    def validate_email(self, content: str) -> bool:
+    def validate_email(
+        self, content: str
+    ) -> tuple[
+        bool,
+        ColdEmailMeta | None,
+        str,
+        Dict[str, Any],
+        set[str],
+        str,
+    ]:
         try:
-            start = content.find("{")
-            end = content.find("}")
-            meta_json = content[start : end + 1]
-            meta = json.loads(meta_json)
-            req = self.c["ai"]["prompt"]["schema"]["required"]
-            for k in req:
-                if not meta.get(k):
-                    self.log("WARNING", f"필수 메타키 누락: {k}")
-                    return False
-            return True
-        except Exception as e:
-            self.log("WARNING", f"JSON 메타 파싱 실패: {e}")
-            return False
+            meta_dict, body = self._parse_json_meta(content)
+        except ValueError as exc:
+            message = self._format_validation_error(str(exc))
+            self.log("WARNING", message)
+            return False, None, "", {}, set(), message
+
+        try:
+            validated = ColdEmailMeta.model_validate(meta_dict)
+        except ValidationError as exc:
+            missing = {
+                str(err["loc"][0])
+                for err in exc.errors()
+                if err.get("type") == "missing"
+            }
+            message = self._format_validation_error(exc, missing)
+            self.log("WARNING", message)
+            return False, None, body, dict(meta_dict), missing, message
+
+        return True, validated, body, dict(meta_dict), set(), ""
 
     def generate_single_email(self, product: Dict[str, Any]) -> Dict[str, Any]:
         prompt = self.create_prompt(product)
         retries = self.c["ai"]["generation"]["retry_attempts"]
+        repair_attempted = False
+        last_error = "유효한 이메일 생성 실패"
+
         for attempt in range(retries):
             out = self.call_llm(prompt)
-            if self.validate_email(out):
-                return {"ok": True, "raw": out}
+            is_valid, meta, body, partial_meta, missing_keys, message = self.validate_email(out)
+
+            if is_valid and meta:
+                serialised = json.dumps(meta.model_dump(), ensure_ascii=False)
+                if body:
+                    serialised += f"\n\n{body}"
+                return {"ok": True, "raw": serialised, "meta": meta.model_dump(), "body": body}
+
+            if missing_keys and not repair_attempted:
+                repair_attempted = True
+                fixes = self._request_missing_keys(product, missing_keys, partial_meta, body)
+                if fixes:
+                    partial_meta.update(fixes)
+                    try:
+                        repaired_meta = ColdEmailMeta.model_validate(partial_meta)
+                    except ValidationError as exc:
+                        message = self._format_validation_error(exc)
+                    else:
+                        serialised = json.dumps(repaired_meta.model_dump(), ensure_ascii=False)
+                        if body:
+                            serialised += f"\n\n{body}"
+                        self.log("INFO", "누락된 키 보정 결과를 반환합니다.")
+                        return {
+                            "ok": True,
+                            "raw": serialised,
+                            "meta": repaired_meta.model_dump(),
+                            "body": body,
+                        }
+                else:
+                    message = self._format_validation_error(
+                        "누락된 키에 대한 보정 응답을 받지 못했습니다.", missing_keys
+                    )
+
+            last_error = message or last_error
             time.sleep(2 ** attempt)
-        return {"ok": False, "error": "유효한 이메일 생성 실패"}
+
+        return {"ok": False, "error": last_error}
 
     def generate_batch(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return [self.generate_single_email(p) for p in products]
@@ -233,16 +396,21 @@ class AIGenerator:
             combined_ocr = "\n\n".join(ocr_texts) if ocr_texts else ""
             combined_reviews = "\n\n".join(review_texts) if review_texts else ""
 
-            # features에 OCR 텍스트와 리뷰 요약 포함
-            features = f"OCR 추출 정보:\n{combined_ocr}"
+            unique_features: List[str] = []
+            if combined_ocr:
+                unique_features.append(f"OCR 추출 정보:\n{combined_ocr}")
             if combined_reviews:
-                features += f"\n\n리뷰 데이터:\n{combined_reviews[:1000]}..."  # 길이 제한
+                unique_features.append(
+                    f"리뷰 데이터 요약:\n{combined_reviews[:1000]}..."
+                )
+            if not unique_features:
+                unique_features.append("제품의 차별점을 추가로 수집하지 못했습니다.")
 
             email_payload = {
                 "product_name": payload.get("product_name", ""),
-                "brand": payload.get("brand", ""),
-                "features": features,
-                "review_summary": combined_reviews[:500] if combined_reviews else "",  # 요약용
+                "unique_features": unique_features,
+                "call_to_action": payload.get("call_to_action")
+                or "추가 논의를 위해 회신 부탁드립니다.",
             }
 
             # 콜드메일 생성
